@@ -1,0 +1,40 @@
+# Binaries
+bin/
+dist/
+
+# Go build cache
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go module download cache (only ignore if vendoring)
+# vendor/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# OpenContext runtime data
+.opencontext/
+
+# Config with secrets (use config.example.yaml as template)
+config.yaml
+config.local.yaml
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage.out
+coverage.html
