@@ -26,6 +26,42 @@ import (
 	"github.com/opencontext/opencontext/pkg/event"
 )
 
+// startRawDumpScheduler runs the RawDumpRunner for each raw_dump subscription
+// on its configured refresh interval. Runs until ctx is cancelled.
+func startRawDumpScheduler(ctx context.Context, subs []subscription.Subscription, s *store.Store, log *slog.Logger) {
+	runner := compiler.NewRawDumpRunner(s, log)
+
+	for i := range subs {
+		sub := &subs[i]
+		if sub.Memory.Backend != subscription.BackendRawDump {
+			continue
+		}
+
+		interval := sub.EffectiveRefreshInterval()
+		log.Info("raw_dump scheduler started", "subscription", sub.Name, "interval", interval)
+
+		go func(s *subscription.Subscription) {
+			// Run once immediately on startup
+			if err := runner.Run(ctx, s); err != nil {
+				log.Warn("raw dump failed", "subscription", s.Name, "err", err)
+			}
+
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if err := runner.Run(ctx, s); err != nil {
+						log.Warn("raw dump failed", "subscription", s.Name, "err", err)
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}(sub)
+	}
+}
+
 var (
 	cfgFile  string
 	logLevel string
@@ -81,12 +117,15 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	ing.Start()
 	defer ing.Stop()
 
-	// Sessionizer + Compiler
+	// Sessionizer + Compiler (for LLM-based subscriptions)
 	sess := sessionizer.New(sessionizer.DefaultConfig())
 	comp := compiler.New(s, sess, log)
 	if err := comp.BuildFromConfig(cfg.Subscriptions); err != nil {
 		return fmt.Errorf("build compiler: %w", err)
 	}
+
+	// RawDumpRunner (for raw_dump subscriptions, zero-config)
+	rawDump := compiler.NewRawDumpRunner(s, log)
 
 	// HTTP router
 	r := chi.NewRouter()
@@ -100,7 +139,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	// Query + control routes
 	r.Get("/api/v1/events", makeQueryHandler(evStore, log))
 	r.Get("/api/v1/health", makeHealthHandler(evStore, version))
-	r.Post("/api/v1/compile", makeCompileHandler(comp, cfg.Subscriptions, log))
+	r.Post("/api/v1/compile", makeCompileHandler(comp, rawDump, cfg.Subscriptions, log))
 
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,
@@ -113,6 +152,9 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	// Graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// Start raw_dump scheduler after ctx is ready
+	startRawDumpScheduler(ctx, cfg.Subscriptions, s, log)
 
 	go func() {
 		log.Info("listening", "addr", cfg.ListenAddr)
@@ -191,10 +233,22 @@ func makeHealthHandler(es store.EventStore, ver string) http.HandlerFunc {
 }
 
 // makeCompileHandler handles POST /api/v1/compile.
-func makeCompileHandler(comp *compiler.Compiler, subs []subscription.Subscription, log *slog.Logger) http.HandlerFunc {
+func makeCompileHandler(comp *compiler.Compiler, rawDump *compiler.RawDumpRunner, subs []subscription.Subscription, log *slog.Logger) http.HandlerFunc {
 	subMap := map[string]*subscription.Subscription{}
 	for i := range subs {
 		subMap[subs[i].Name] = &subs[i]
+	}
+
+	runSub := func(sub *subscription.Subscription) {
+		if sub.Memory.Backend == subscription.BackendRawDump {
+			if err := rawDump.Run(context.Background(), sub); err != nil {
+				log.Error("raw dump failed", "subscription", sub.Name, "err", err)
+			}
+		} else {
+			if err := comp.Run(context.Background(), sub); err != nil {
+				log.Error("compile failed", "subscription", sub.Name, "err", err)
+			}
+		}
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -204,13 +258,8 @@ func makeCompileHandler(comp *compiler.Compiler, subs []subscription.Subscriptio
 		_ = json.NewDecoder(r.Body).Decode(&req)
 
 		if req.Subscription == "" {
-			// Compile all subscriptions
 			for _, sub := range subMap {
-				go func(s *subscription.Subscription) {
-					if err := comp.Run(context.Background(), s); err != nil {
-						log.Error("compile failed", "subscription", s.Name, "err", err)
-					}
-				}(sub)
+				go runSub(sub)
 			}
 			writeJSON(w, http.StatusOK, map[string]string{"status": "triggered", "subscription": "all"})
 			return
@@ -224,12 +273,7 @@ func makeCompileHandler(comp *compiler.Compiler, subs []subscription.Subscriptio
 			return
 		}
 
-		go func() {
-			if err := comp.Run(context.Background(), sub); err != nil {
-				log.Error("compile failed", "subscription", sub.Name, "err", err)
-			}
-		}()
-
+		go runSub(sub)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "triggered", "subscription": req.Subscription})
 	}
 }

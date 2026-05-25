@@ -45,8 +45,14 @@ func New(s *store.Store, sess *sessionizer.Sessionizer, log *slog.Logger) *Compi
 }
 
 // BuildFromConfig initialises backends and summarizers for all subscriptions.
+// raw_dump subscriptions are handled by RawDumpRunner and are skipped here.
 func (c *Compiler) BuildFromConfig(subs []subscription.Subscription) error {
 	for _, sub := range subs {
+		// raw_dump is handled by RawDumpRunner, not the LLM Compiler
+		if sub.Memory.Backend == subscription.BackendRawDump {
+			continue
+		}
+
 		// Memory backend
 		switch sub.Memory.Backend {
 		case subscription.BackendFile, "":

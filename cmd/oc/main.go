@@ -482,7 +482,7 @@ _oc_precmd() {
     --exit-code "$_oc_exit" \
     --duration-ms "$_oc_dur" \
     --cwd "$PWD" \
-    --sensitivity %d &>/dev/null &)
+    --sensitivity %d >/dev/null 2>&1 &)
 
   _oc_cmd_input=""
 }
@@ -514,7 +514,7 @@ _oc_precmd() {
     --exit-code "$_oc_exit" \
     --duration-ms "$_oc_dur" \
     --cwd "$PWD" \
-    --sensitivity %d &>/dev/null &)
+    --sensitivity %d >/dev/null 2>&1 &)
 
   _oc_cmd_input=""
 }

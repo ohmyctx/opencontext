@@ -117,6 +117,20 @@ func (c *Collector) Run(ctx context.Context) error {
 	}
 }
 
+// isTestSession returns true for Claude Code's internal test directories,
+// which generate hundreds of synthetic messages that pollute the event stream.
+func isTestSession(path string) bool {
+	dir := filepath.Base(filepath.Dir(path))
+	// Claude Code test suite uses dirs like:
+	//   -tmp-TestP0-..., -tmp-TestE2E-..., -tmp-TestP2-...
+	for _, prefix := range []string{"-tmp-Test", "-tmp-test"} {
+		if strings.HasPrefix(dir, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // scan discovers all JSONL session files and processes new lines.
 func (c *Collector) scan(ctx context.Context) {
 	pattern := filepath.Join(c.cfg.ClaudeProjectsDir, "*", "*.jsonl")
@@ -128,6 +142,9 @@ func (c *Collector) scan(ctx context.Context) {
 	var batch []*event.ActivityEvent
 
 	for _, path := range files {
+		if isTestSession(path) {
+			continue
+		}
 		events, err := c.processFile(path)
 		if err != nil {
 			c.log.Debug("process file error", "file", path, "err", err)

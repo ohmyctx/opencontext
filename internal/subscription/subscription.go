@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/viper"
 
@@ -18,7 +19,12 @@ import (
 type MemoryBackendType string
 
 const (
+	// BackendFile writes LLM-summarized memory.md (requires Summarizer config).
 	BackendFile MemoryBackendType = "file"
+
+	// BackendRawDump writes recent raw events directly as markdown.
+	// Zero-config: no LLM needed. The reading agent interprets events itself.
+	BackendRawDump MemoryBackendType = "raw_dump"
 )
 
 // Filter defines which events a subscription includes.
@@ -44,11 +50,20 @@ type LLMConfig struct {
 
 // Subscription is a single named compile job configuration.
 type Subscription struct {
-	Name     string       `mapstructure:"name"`
-	Filter   Filter       `mapstructure:"filter"`
-	Memory   MemoryConfig `mapstructure:"memory"`
-	Schedule string       `mapstructure:"schedule"` // cron expression
-	LLM      *LLMConfig   `mapstructure:"llm"`
+	Name            string       `mapstructure:"name"`
+	Filter          Filter       `mapstructure:"filter"`
+	Memory          MemoryConfig `mapstructure:"memory"`
+	Schedule        string       `mapstructure:"schedule"`         // cron expression (for LLM compile)
+	RefreshInterval int          `mapstructure:"refresh_interval"` // seconds; for raw_dump auto-refresh (default 30)
+	LLM             *LLMConfig   `mapstructure:"llm"`
+}
+
+// EffectiveRefreshInterval returns the refresh interval in seconds, defaulting to 30.
+func (s *Subscription) EffectiveRefreshInterval() time.Duration {
+	if s.RefreshInterval <= 0 {
+		return 30 * time.Second
+	}
+	return time.Duration(s.RefreshInterval) * time.Second
 }
 
 // MaxSensitivity returns the effective max sensitivity (defaults to L2).
