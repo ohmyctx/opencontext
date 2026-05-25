@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -304,30 +305,41 @@ func installShellHooks() error {
 		return err
 	}
 
+	// Resolve the absolute path of the oc binary so the hook works regardless
+	// of whether oc is in PATH.
+	ocBin, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve oc binary path: %w", err)
+	}
+	// Follow symlinks so the stored path is the real binary.
+	if resolved, err := filepath.EvalSymlinks(ocBin); err == nil {
+		ocBin = resolved
+	}
+
 	hooksDir := home + "/.opencontext/collectors/shell"
 	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
 		return err
 	}
 
-	zshHook := `# OpenContext shell hooks — installed by: oc collector shell install
-# Re-run install to update.
+	zshHook := fmt.Sprintf(`# OpenContext shell hooks — installed by: oc collector shell install
+# Re-run install to update. oc binary: %s
 
 _oc_preexec() {
-  _oc_cmd_start=$(date +%s%3N)
+  _oc_cmd_start=$(date +%%s%%3N)
   _oc_cmd_input=$1
 }
 
 _oc_precmd() {
-  local _oc_exit_code=$?
+  local _oc_exit=$?
   local _oc_end
-  _oc_end=$(date +%s%3N)
+  _oc_end=$(date +%%s%%3N)
   local _oc_dur=$(( _oc_end - ${_oc_cmd_start:-$_oc_end} ))
 
   [[ -z "$_oc_cmd_input" ]] && return 0
 
-  oc collector shell push \
+  %s collector shell push \
     --command "$_oc_cmd_input" \
-    --exit-code "$_oc_exit_code" \
+    --exit-code "$_oc_exit" \
     --duration-ms "$_oc_dur" \
     --cwd "$PWD" &>/dev/null &
 
@@ -337,27 +349,28 @@ _oc_precmd() {
 autoload -Uz add-zsh-hook
 add-zsh-hook preexec _oc_preexec
 add-zsh-hook precmd _oc_precmd
-`
+`, ocBin, ocBin)
 
-	bashHook := `# OpenContext shell hooks — installed by: oc collector shell install
+	bashHook := fmt.Sprintf(`# OpenContext shell hooks — installed by: oc collector shell install
+# oc binary: %s
 
 _oc_preexec() {
-  _oc_cmd_start=$(date +%s%3N 2>/dev/null || echo 0)
+  _oc_cmd_start=$(date +%%s%%3N 2>/dev/null || echo 0)
   _oc_cmd_input=$BASH_COMMAND
 }
 
 _oc_precmd() {
-  local _oc_exit_code=$?
+  local _oc_exit=$?
   local _oc_end
-  _oc_end=$(date +%s%3N 2>/dev/null || echo 0)
+  _oc_end=$(date +%%s%%3N 2>/dev/null || echo 0)
   local _oc_dur=$(( _oc_end - ${_oc_cmd_start:-0} ))
 
   [[ -z "$_oc_cmd_input" ]] && return 0
   [[ "$_oc_cmd_input" == "_oc_precmd" ]] && return 0
 
-  oc collector shell push \
+  %s collector shell push \
     --command "$_oc_cmd_input" \
-    --exit-code "$_oc_exit_code" \
+    --exit-code "$_oc_exit" \
     --duration-ms "$_oc_dur" \
     --cwd "$PWD" &>/dev/null &
 
@@ -366,7 +379,7 @@ _oc_precmd() {
 
 trap '_oc_preexec "$BASH_COMMAND"' DEBUG
 PROMPT_COMMAND="_oc_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
-`
+`, ocBin, ocBin)
 
 	if err := os.WriteFile(hooksDir+"/hooks.zsh", []byte(zshHook), 0o644); err != nil {
 		return err
