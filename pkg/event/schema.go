@@ -168,6 +168,30 @@ func init() {
 			},
 		},
 		{
+			Source:      SourceClaude,
+			Type:        EventTypeUserMessage,
+			Description: "A message sent by the user in a Claude Code session. Captures the user's intent and questions to the AI agent.",
+			LabelDefs: map[string]FieldDef{
+				"project":    {Description: "Project name inferred from session working directory", Example: "opencontext"},
+				"session_id": {Description: "Claude Code session UUID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"message":      {Description: "The text content of the user message", Example: "帮我实现 HTTP ingester"},
+				"message_len":  {Description: "Character count of the message", Example: "42"},
+				"session_file": {Description: "Absolute path to the JSONL session file", Example: "/root/.claude/projects/-root-code-opencontext/8478ea2f.jsonl"},
+			},
+		},
+		{
+			Source:      SourceClaude,
+			Type:        EventTypeSessionStart,
+			Description: "A new Claude Code session was started.",
+			LabelDefs: map[string]FieldDef{
+				"project":    {Description: "Project name inferred from session working directory", Example: "opencontext"},
+				"session_id": {Description: "Claude Code session UUID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
+			},
+			PayloadDefs: map[string]FieldDef{},
+		},
+		{
 			Source:      SourceIDE,
 			Type:        EventTypeFileSave,
 			Description: "A file was saved in the IDE.",

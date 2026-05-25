@@ -17,6 +17,7 @@ const (
 	SourceBrowser Source = "browser"
 	SourceIDE     Source = "ide"
 	SourceIM      Source = "im"
+	SourceClaude  Source = "claude"
 )
 
 // EventType identifies the specific activity within a Source.
@@ -50,6 +51,10 @@ const (
 	// im
 	EventTypeMessageSent EventType = "message_sent"
 	EventTypeCallStart   EventType = "call_start"
+
+	// claude
+	EventTypeUserMessage EventType = "user_message"
+	EventTypeSessionStart EventType = "session_start"
 )
 
 // SensitivityLevel encodes the privacy tier of an event.

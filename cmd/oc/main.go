@@ -6,13 +6,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	claudecollector "github.com/opencontext/opencontext/collectors/claude"
 	"github.com/opencontext/opencontext/pkg/client"
 	"github.com/opencontext/opencontext/pkg/event"
 )
@@ -197,6 +201,7 @@ func buildCollectorCmd() *cobra.Command {
 		Short: "Collector management subcommands",
 	}
 	collector.AddCommand(buildShellCollectorCmd())
+	collector.AddCommand(buildClaudeCollectorCmd())
 	return collector
 }
 
@@ -309,6 +314,125 @@ Sensitivity levels:
 	return cmd
 }
 
+// ── claude collector ──────────────────────────────────────────────────────────
+
+func buildClaudeCollectorCmd() *cobra.Command {
+	claude := &cobra.Command{
+		Use:   "claude",
+		Short: "Claude Code session collector commands",
+	}
+	claude.AddCommand(buildClaudeStartCmd())
+	claude.AddCommand(buildClaudeInstallCmd())
+	return claude
+}
+
+func buildClaudeStartCmd() *cobra.Command {
+	var (
+		projectsDir string
+		pollSecs    int
+		sensitivity int
+		verbose     bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "start",
+		Short: "Start watching Claude Code sessions and push user messages to contextd",
+		Long: `Watches ~/.claude/projects/**/*.jsonl for new user messages and pushes
+them as events to contextd. Runs in the foreground; use 'install' to
+auto-start on shell launch.
+
+Sensitivity levels:
+  1 (L1) — message length only (no message text stored)
+  2 (L2, default) — full message text stored`,
+		Example: `  oc collector claude start
+  oc collector claude start --sensitivity 2 --poll 5`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			logLevel := slog.LevelInfo
+			if verbose {
+				logLevel = slog.LevelDebug
+			}
+			log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
+
+			cfg := claudecollector.DefaultConfig()
+			cfg.DaemonURL = daemonURL
+			cfg.Sensitivity = event.SensitivityLevel(sensitivity)
+			cfg.PollInterval = time.Duration(pollSecs) * time.Second
+			if projectsDir != "" {
+				cfg.ClaudeProjectsDir = projectsDir
+			}
+
+			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+			defer stop()
+
+			return claudecollector.New(cfg, log).Run(ctx)
+		},
+	}
+
+	cmd.Flags().StringVar(&projectsDir, "projects-dir", "", "Claude Code projects directory (default: ~/.claude/projects)")
+	cmd.Flags().IntVar(&pollSecs, "poll", 3, "poll interval in seconds")
+	cmd.Flags().IntVar(&sensitivity, "sensitivity", 2, "sensitivity level: 1=length only, 2=full message text")
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "verbose debug logging")
+
+	return cmd
+}
+
+func buildClaudeInstallCmd() *cobra.Command {
+	var sensitivity int
+
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Auto-start Claude Code collector on shell launch",
+		Long: `Adds a background launch of 'oc collector claude start' to ~/.zshrc.
+Uses a PID file to prevent duplicate processes.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installClaudeHooks(sensitivity)
+		},
+	}
+
+	cmd.Flags().IntVar(&sensitivity, "sensitivity", 2, "sensitivity level: 1=length only, 2=full message text")
+	return cmd
+}
+
+func installClaudeHooks(sensitivity int) error {
+	ocBin, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve oc binary path: %w", err)
+	}
+	if resolved, err := filepath.EvalSymlinks(ocBin); err == nil {
+		ocBin = resolved
+	}
+
+	home, _ := os.UserHomeDir()
+	pidFile := filepath.Join(home, ".opencontext", "collectors", "claude", "collector.pid")
+
+	// Shell snippet: start the collector only if not already running.
+	snippet := fmt.Sprintf(`
+# OpenContext — Claude Code collector (auto-start)
+_oc_claude_start() {
+  local pidfile=%s
+  if [[ -f "$pidfile" ]]; then
+    local pid
+    pid=$(cat "$pidfile")
+    kill -0 "$pid" 2>/dev/null && return  # already running
+  fi
+  mkdir -p "$(dirname "$pidfile")"
+  %s collector claude start --sensitivity %d &>/dev/null &
+  echo $! > "$pidfile"
+}
+_oc_claude_start
+`, pidFile, ocBin, sensitivity)
+
+	zshrc := filepath.Join(home, ".zshrc")
+	appendIfMissing(zshrc, snippet, "oc_claude_start")
+
+	fmt.Println("Claude Code collector auto-start installed.")
+	fmt.Printf("  sensitivity: L%d\n", sensitivity)
+	fmt.Printf("  pid file:    %s\n", pidFile)
+	fmt.Println("\nRestart your shell or run:")
+	fmt.Printf("  %s collector claude start --sensitivity %d &\n", ocBin, sensitivity)
+	return nil
+}
+
 // ── shell helpers ─────────────────────────────────────────────────────────────
 
 func installShellHooks(sensitivity int) error {
@@ -353,12 +477,12 @@ _oc_precmd() {
 
   [[ -z "$_oc_cmd_input" ]] && return 0
 
-  %s collector shell push \
+  (%s collector shell push \
     --command "$_oc_cmd_input" \
     --exit-code "$_oc_exit" \
     --duration-ms "$_oc_dur" \
     --cwd "$PWD" \
-    --sensitivity %d &>/dev/null &
+    --sensitivity %d &>/dev/null &)
 
   _oc_cmd_input=""
 }
@@ -385,12 +509,12 @@ _oc_precmd() {
   [[ -z "$_oc_cmd_input" ]] && return 0
   [[ "$_oc_cmd_input" == "_oc_precmd" ]] && return 0
 
-  %s collector shell push \
+  (%s collector shell push \
     --command "$_oc_cmd_input" \
     --exit-code "$_oc_exit" \
     --duration-ms "$_oc_dur" \
     --cwd "$PWD" \
-    --sensitivity %d &>/dev/null &
+    --sensitivity %d &>/dev/null &)
 
   _oc_cmd_input=""
 }
@@ -535,6 +659,21 @@ func buildEventSummary(e *event.ActivityEvent) string {
 			return branch + ": " + msg
 		}
 		return msg + branch
+	case event.SourceClaude:
+		msg, _ := e.Payload["message"].(string)
+		proj := e.Labels["project"]
+		if msg == "" {
+			msgLen, _ := e.Payload["message_len"].(float64)
+			msg = fmt.Sprintf("(message, %d chars)", int(msgLen))
+		}
+		if len([]rune(msg)) > 60 {
+			runes := []rune(msg)
+			msg = string(runes[:57]) + "..."
+		}
+		if proj != "" {
+			return "[" + proj + "] " + msg
+		}
+		return msg
 	case event.SourceBrowser:
 		domain := e.Labels["domain"]
 		title, _ := e.Payload["title"].(string)
