@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/opencontext/opencontext/pkg/event"
-	"github.com/opencontext/opencontext/pkg/session"
+	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/yetanotherai/opencontext/pkg/session"
 )
 
 const defaultGapThreshold = 15 * time.Minute

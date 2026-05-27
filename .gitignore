@@ -2,7 +2,7 @@
 bin/
 dist/
 contextd        # root-level dev binary (make build writes to bin/)
-oc
+/oc             # root-level oc binary
 
 # Go artifacts
 *.exe

@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/opencontext/opencontext/pkg/client"
-	"github.com/opencontext/opencontext/pkg/event"
+	"github.com/yetanotherai/opencontext/pkg/client"
+	"github.com/yetanotherai/opencontext/pkg/event"
 )
 
 const (

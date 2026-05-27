@@ -17,9 +17,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	claudecollector "github.com/opencontext/opencontext/collectors/claude"
-	"github.com/opencontext/opencontext/pkg/client"
-	"github.com/opencontext/opencontext/pkg/event"
+	claudecollector "github.com/yetanotherai/opencontext/collectors/claude"
+	"github.com/yetanotherai/opencontext/pkg/client"
+	"github.com/yetanotherai/opencontext/pkg/event"
 )
 
 var (

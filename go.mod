@@ -1,4 +1,4 @@
-module github.com/opencontext/opencontext
+module github.com/yetanotherai/opencontext
 
 go 1.25.7
 

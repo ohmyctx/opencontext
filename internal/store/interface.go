@@ -6,8 +6,8 @@ package store
 import (
 	"context"
 
-	"github.com/opencontext/opencontext/pkg/event"
-	"github.com/opencontext/opencontext/pkg/session"
+	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/yetanotherai/opencontext/pkg/session"
 )
 
 // EventStore persists and retrieves ActivityEvents.

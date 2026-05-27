@@ -156,11 +156,11 @@ func init() {
 			LabelDefs: map[string]FieldDef{
 				"app":      {Description: "Browser executable name", Example: "chrome.exe"},
 				"app_name": {Description: "Browser display name", Example: "Google Chrome"},
-				"url":      {Description: "Full URL of the new page", Example: "https://github.com/opencontext/opencontext"},
+				"url":      {Description: "Full URL of the new page", Example: "https://github.com/yetanotherai/opencontext"},
 				"title":    {Description: "Page title", Example: "opencontext/opencontext: GitHub"},
 			},
 			PayloadDefs: map[string]FieldDef{
-				"url":      {Description: "Full URL of the new page", Example: "https://github.com/opencontext/opencontext"},
+				"url":      {Description: "Full URL of the new page", Example: "https://github.com/yetanotherai/opencontext"},
 				"title":    {Description: "Page title", Example: "opencontext/opencontext: GitHub"},
 				"prev_url": {Description: "URL of the previous page", Example: "https://github.com"},
 			},

@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/opencontext/opencontext/pkg/event"
+	"github.com/yetanotherai/opencontext/pkg/event"
 )
 
 // claudeHookInput is the JSON body Claude Code sends for hook events.

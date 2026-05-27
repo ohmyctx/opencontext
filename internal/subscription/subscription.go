@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/opencontext/opencontext/internal/summarizer"
-	"github.com/opencontext/opencontext/pkg/event"
+	"github.com/yetanotherai/opencontext/internal/summarizer"
+	"github.com/yetanotherai/opencontext/pkg/event"
 )
 
 // MemoryBackendType identifies the memory output backend.
