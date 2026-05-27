@@ -1,8 +1,10 @@
-# Binaries
+# ── Binaries ──────────────────────────────────────────────────────────────────
 bin/
 dist/
+contextd        # root-level dev binary (make build writes to bin/)
+oc
 
-# Go build cache
+# Go artifacts
 *.exe
 *.exe~
 *.dll
@@ -11,22 +13,38 @@ dist/
 *.test
 *.out
 
-# Go module download cache (only ignore if vendoring)
-# vendor/
-
-# Database files
+# ── Database / runtime data ───────────────────────────────────────────────────
 *.db
 *.db-shm
 *.db-wal
+.opencontext/           # all contextd runtime data (events.db, memory.md, hooks)
 
-# OpenContext runtime data
-.opencontext/
+# Generated memory / context files (written by contextd at runtime)
+memory.md
+**/memory.md
+**/.hermes.md
 
-# Config with secrets (use config.example.yaml as template)
+# ── Config files that may contain local paths or secrets ─────────────────────
+# Use the *.example.yaml / *.example.json templates as reference.
 config.yaml
 config.local.yaml
+*.local.yaml
+*.local.json
+# Collector-specific user configs (not the bundled *.example.yaml)
+collectors/**/*-collector.yaml
+collectors/**/collector.yaml
+# Python virtual environments inside collector dirs
+collectors/**/.venv/
+collectors/**/__pycache__/
+collectors/**/*.pyc
+collectors/**/*.pyo
+collectors/**/*.pyd
 
-# Editor / IDE
+# ── Shell hook adapters written by `oc collector * install` ──────────────────
+# These are written to ~/.opencontext/collectors/*/; the sources live here.
+.opencontext/collectors/
+
+# ── Editor / OS ───────────────────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
@@ -35,6 +53,7 @@ config.local.yaml
 .DS_Store
 Thumbs.db
 
-# Test coverage
+# ── Test / scratch files ──────────────────────────────────────────────────────
+test_ref.md
 coverage.out
 coverage.html

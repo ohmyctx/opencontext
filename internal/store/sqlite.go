@@ -220,6 +220,25 @@ func (s *SQLiteEventStore) Count(ctx context.Context) (int64, error) {
 	return n, err
 }
 
+func (s *SQLiteEventStore) Prune(ctx context.Context, beforeMs int64) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM events WHERE ts < ?`, beforeMs)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+func (s *SQLiteEventStore) DeleteAll(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM events`)
+	return err
+}
+
+func (s *SQLiteEventStore) DeleteBySource(ctx context.Context, source string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM events WHERE source = ?`, source)
+	return err
+}
+
 func (s *SQLiteEventStore) Close() error {
 	return s.db.Close()
 }

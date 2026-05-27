@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -25,6 +26,43 @@ import (
 	"github.com/opencontext/opencontext/internal/subscription"
 	"github.com/opencontext/opencontext/pkg/event"
 )
+
+// startPruner runs a daily job that deletes events older than retentionDays.
+// retentionDays <= 0 is treated as the default (90 days).
+func startPruner(ctx context.Context, es store.EventStore, retentionDays int, log *slog.Logger) {
+	days := retentionDays
+	if days <= 0 {
+		days = 90
+	}
+	retention := time.Duration(days) * 24 * time.Hour
+	log.Info("event pruner started", "retention_days", days)
+
+	prune := func() {
+		cutoff := time.Now().Add(-retention).UnixMilli()
+		n, err := es.Prune(ctx, cutoff)
+		if err != nil {
+			log.Warn("prune failed", "err", err)
+			return
+		}
+		if n > 0 {
+			log.Info("pruned old events", "deleted", n, "retention_days", days)
+		}
+	}
+
+	// Run once at startup so a restarted daemon cleans up immediately.
+	prune()
+
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			prune()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
 
 // startRawDumpScheduler runs the RawDumpRunner for each raw_dump subscription
 // on its configured refresh interval. Runs until ctx is cancelled.
@@ -108,8 +146,11 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 
 	s := &store.Store{Events: evStore, Sessions: sessStore}
 
-	// Policy filter
+	// Policy filter — honour the global max_sensitivity from config (defaults to L2)
 	policyCfg := policy.DefaultConfig()
+	if cfg.MaxSensitivity > 0 {
+		policyCfg.MaxSensitivity = cfg.MaxSensitivity
+	}
 	filter := policy.New(policyCfg)
 
 	// Ingester
@@ -135,9 +176,14 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 
 	// Ingester routes
 	ing.Mount(r)
+	ing.MountClaudeHook(r)
+	ing.MountCodexHook(r)
+	ing.MountCursorHook(r)
+	ing.MountOpenCodeHook(r)
 
 	// Query + control routes
 	r.Get("/api/v1/events", makeQueryHandler(evStore, log))
+	r.Delete("/api/v1/events", makeDeleteEventsHandler(evStore, log))
 	r.Get("/api/v1/health", makeHealthHandler(evStore, version))
 	r.Post("/api/v1/compile", makeCompileHandler(comp, rawDump, cfg.Subscriptions, log))
 
@@ -153,8 +199,9 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Start raw_dump scheduler after ctx is ready
+	// Start raw_dump scheduler and event pruner after ctx is ready.
 	startRawDumpScheduler(ctx, cfg.Subscriptions, s, log)
+	go startPruner(ctx, evStore, cfg.RetentionDays, log)
 
 	go func() {
 		log.Info("listening", "addr", cfg.ListenAddr)
@@ -183,18 +230,23 @@ func makeQueryHandler(es store.EventStore, log *slog.Logger) http.HandlerFunc {
 		q.Project = r.URL.Query().Get("project")
 		q.Query = r.URL.Query().Get("q")
 
-		parseDuration := func(key string, defaultDur time.Duration) int64 {
+		parseSince := func(key string, defaultDur time.Duration) int64 {
 			val := r.URL.Query().Get(key)
 			if val == "" {
 				return time.Now().Add(-defaultDur).UnixMilli()
 			}
+			// First try parsing as duration string (e.g., "10m", "2h", "7d")
 			if d, err := time.ParseDuration(val); err == nil {
 				return time.Now().Add(-d).UnixMilli()
+			}
+			// Then try parsing as Unix timestamp in milliseconds
+			if ts, err := strconv.ParseInt(val, 10, 64); err == nil && ts > 0 {
+				return ts
 			}
 			return 0
 		}
 
-		q.Since = parseDuration("since", 24*time.Hour)
+		q.Since = parseSince("since_ts", 24*time.Hour)
 
 		if lim := r.URL.Query().Get("limit"); lim != "" {
 			fmt.Sscanf(lim, "%d", &q.Limit)
@@ -229,6 +281,28 @@ func makeHealthHandler(es store.EventStore, ver string) http.HandlerFunc {
 			"uptime_seconds": int(time.Since(start).Seconds()),
 			"events_stored":  count,
 		})
+	}
+}
+
+// makeDeleteEventsHandler handles DELETE /api/v1/events.
+func makeDeleteEventsHandler(es store.EventStore, log *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		source := r.URL.Query().Get("source")
+		if source != "" {
+			if err := es.DeleteBySource(r.Context(), source); err != nil {
+				log.Warn("delete events by source failed", "source", source, "err", err)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]string{"status": "deleted", "source": source})
+			return
+		}
+		if err := es.DeleteAll(r.Context()); err != nil {
+			log.Warn("delete events failed", "err", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	}
 }
 

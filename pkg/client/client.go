@@ -173,6 +173,44 @@ func (c *Client) TriggerCompile(ctx context.Context, subscription string) error 
 	return nil
 }
 
+// DeleteAllEvents removes all stored events from contextd.
+func (c *Client) DeleteAllEvents(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/v1/events", nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("contextd returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// DeleteEventsBySource removes all stored events with the given source.
+func (c *Client) DeleteEventsBySource(ctx context.Context, source string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/v1/events?source="+source, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("contextd returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // Health returns the daemon health status.
 func (c *Client) Health(ctx context.Context) (map[string]any, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/health", nil)

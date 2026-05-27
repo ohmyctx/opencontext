@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencontext/opencontext/internal/injector"
 	"github.com/opencontext/opencontext/internal/store"
 	"github.com/opencontext/opencontext/internal/subscription"
 	"github.com/opencontext/opencontext/pkg/event"
@@ -37,7 +38,7 @@ func (r *RawDumpRunner) Run(ctx context.Context, sub *subscription.Subscription)
 	}
 
 	since := time.Now().Add(-24 * time.Hour).UnixMilli()
-	maxEvents := 150
+	maxEvents := 100
 
 	events, err := r.queryEvents(ctx, sub, since, maxEvents)
 	if err != nil {
@@ -55,15 +56,148 @@ func (r *RawDumpRunner) Run(ctx context.Context, sub *subscription.Subscription)
 	if err := os.WriteFile(path, []byte(md), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
+
+	// If claude_md is configured, append @reference to CLAUDE.md if not already present.
+	if sub.Memory.ClaudeMD != "" {
+		if err := appendClaudeLink(sub.Memory.ClaudeMD, sub.Memory.Path); err != nil {
+			r.log.Warn("failed to append claude link", "claude_md", sub.Memory.ClaudeMD, "err", err)
+		}
+	}
+
+	// Inject memory section into each configured third-party agent file
+	// (e.g. ~/.hermes/memories/MEMORY.md, ~/.openclaw/workspace/MEMORY.md).
+	for _, t := range sub.Memory.InjectTargets {
+		if t.Path == "" {
+			continue
+		}
+		target := injector.InjectTarget{Path: t.Path, Header: t.Header}
+		if err := injector.Inject(target, md); err != nil {
+			r.log.Warn("inject target failed", "path", t.Path, "err", err)
+		} else {
+			r.log.Debug("injected memory", "target", t.Path)
+		}
+	}
+
 	return nil
 }
 
+// appendClaudeLink appends @memoryRef to claudeMD if the line doesn't already exist.
+// claudeMD is the path to CLAUDE.md (e.g., /path/to/CLAUDE.md)
+// memoryPath is the absolute path to the memory file (e.g., /path/to/.opencontext/memory.md)
+func appendClaudeLink(claudeMD, memoryPath string) error {
+	// Compute @-style path relative to CLAUDE.md directory
+	// e.g., /path/to/CLAUDE.md and /path/to/.opencontext/memory.md -> @.opencontext/memory.md
+	// Note: rel is like ".opencontext/memory.md" (with leading dot as part of dir name)
+	rel := computeRelativeToClaudeMD(claudeMD, memoryPath)
+	ref := "@" + rel // "@" + ".opencontext/memory.md" = "@.opencontext/memory.md"
+
+	// Read existing CLAUDE.md
+	content, err := os.ReadFile(claudeMD)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read CLAUDE.md: %w", err)
+	}
+
+	// Check if reference already exists
+	if os.IsNotExist(err) {
+		content = []byte{}
+	} else {
+		// Split into lines and check each
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == ref || line == ref+")" {
+				// Already present
+				return nil
+			}
+		}
+	}
+
+	// Append the reference
+	f, err := os.OpenFile(claudeMD, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("open CLAUDE.md: %w", err)
+	}
+	defer f.Close()
+
+	// Add newline if file doesn't end with one
+	if len(content) > 0 && content[len(content)-1] != '\n' {
+		if _, err := f.WriteString("\n"); err != nil {
+			return err
+		}
+	}
+
+	// Append the @ reference as a comment explaining its purpose
+	if _, err := f.WriteString("\n" + ref + "  \n"); err != nil {
+		return fmt.Errorf("write @ reference: %w", err)
+	}
+
+	return nil
+}
+
+// computeRelativeToClaudeMD computes the relative path from the CLAUDE.md directory
+// to the memory file, for use in @-style references.
+// claudeMD: /path/to/CLAUDE.md
+// memoryPath: /path/to/.opencontext/memory.md
+// Returns: .opencontext/memory.md (caller prepends @)
+func computeRelativeToClaudeMD(claudeMD, memoryPath string) string {
+	claDir := filepath.Dir(claudeMD)
+	rel, err := filepath.Rel(claDir, memoryPath)
+	if err != nil {
+		// Fallback: just use the memory filename
+		return filepath.Base(memoryPath)
+	}
+	// rel is like ".opencontext/memory.md" - the leading dot is part of the directory name
+	// Strip leading "./" if present (e.g., "../../other/.opencontext/memory.md")
+	rel = strings.TrimPrefix(rel, "./")
+	return rel
+}
+
 func (r *RawDumpRunner) queryEvents(ctx context.Context, sub *subscription.Subscription, since int64, limit int) ([]*event.ActivityEvent, error) {
+	// System-level sources that don't have per-project semantics
+	isSystemSource := func(s event.Source) bool {
+		return s == event.SourceOS || s == event.SourceBrowser ||
+			s == event.SourceClaude || s == event.SourceCodex ||
+			s == event.SourceCursor || s == event.SourceOpenCode
+	}
+
+	// Check if all sources are system-level
+	allSourcesSystem := len(sub.Filter.Sources) > 0
+	for _, src := range sub.Filter.Sources {
+		if !isSystemSource(src) {
+			allSourcesSystem = false
+			break
+		}
+	}
+
 	if len(sub.Filter.Projects) > 0 {
 		var all []*event.ActivityEvent
-		for _, proj := range sub.Filter.Projects {
+		perProjectLimit := limit / len(sub.Filter.Projects)
+		if perProjectLimit < 20 {
+			perProjectLimit = 20
+		}
+
+		// Query per-project events for non-system sources
+		hasNonSystemSource := !allSourcesSystem
+
+		if hasNonSystemSource {
+			for _, proj := range sub.Filter.Projects {
+				evts, err := r.store.Events.Query(ctx, &event.QueryRequest{
+					Project:        proj,
+					Since:          since,
+					MaxSensitivity: sub.MaxSensitivity(),
+					Limit:          perProjectLimit,
+				})
+				if err != nil {
+					return nil, err
+				}
+				all = append(all, evts...)
+			}
+		}
+
+		// Also query system-level events that don't have a specific project
+		// (os events, browser events, claude events from unknown projects)
+		if len(sub.Filter.Sources) == 0 || isSystemSource(event.SourceOS) {
 			evts, err := r.store.Events.Query(ctx, &event.QueryRequest{
-				Project:        proj,
 				Since:          since,
 				MaxSensitivity: sub.MaxSensitivity(),
 				Limit:          limit,
@@ -73,6 +207,7 @@ func (r *RawDumpRunner) queryEvents(ctx context.Context, sub *subscription.Subsc
 			}
 			all = append(all, evts...)
 		}
+
 		sort.Slice(all, func(i, j int) bool { return all[i].Ts < all[j].Ts })
 		if len(all) > limit {
 			all = all[len(all)-limit:]
@@ -103,7 +238,8 @@ func renderRawDump(sub *subscription.Subscription, events []*event.ActivityEvent
 	sb.WriteString("# OpenContext: Activity Memory\n\n")
 	sb.WriteString(fmt.Sprintf("> **Project:** %s  \n", projectLabel))
 	sb.WriteString(fmt.Sprintf("> **Updated:** %s  \n", now.Format("2006-01-02 15:04:05")))
-	sb.WriteString(fmt.Sprintf("> **Events:** %d (last 24h)  \n", len(events)))
+	sb.WriteString(fmt.Sprintf("> **Events:** %d (up to 100 most recent, last 24h)  \n", len(events)))
+	sb.WriteString("> **Query more:** `oc events --since 7d --source shell` · `oc events --project myapp`  \n")
 	sb.WriteString(">\n")
 	sb.WriteString("> *Auto-generated by [OpenContext](https://github.com/opencontext/opencontext). Do not edit manually.*\n\n")
 
@@ -139,10 +275,11 @@ func renderRawDump(sub *subscription.Subscription, events []*event.ActivityEvent
 		return sb.String()
 	}
 
-	// Reverse: newest first
+	// Reverse: newest first, then deduplicate consecutive identical events
 	reversed := make([]*event.ActivityEvent, len(events))
 	copy(reversed, events)
 	sort.Slice(reversed, func(i, j int) bool { return reversed[i].Ts > reversed[j].Ts })
+	reversed = deduplicateConsecutive(reversed)
 
 	var currentDay string
 	for _, e := range reversed {
@@ -155,15 +292,66 @@ func renderRawDump(sub *subscription.Subscription, events []*event.ActivityEvent
 		sb.WriteString(formatEventLine(e, t))
 	}
 
+	if len(reversed) >= 100 {
+		sb.WriteString("\n> **Showing 100 most recent events.** To query further back:\n")
+		sb.WriteString("> ```\n")
+		sb.WriteString("> oc events --since 7d\n")
+		sb.WriteString("> oc events --since 7d --source shell --project myapp\n")
+		sb.WriteString("> oc events --since 7d --source claude\n")
+		sb.WriteString("> ```\n")
+	}
+
 	return sb.String()
+}
+
+// deduplicateConsecutive removes consecutive events that have the same
+// logical content (same source+type+project+command/message). The list is
+// expected to be sorted newest-first; only the first (newest) of a run is kept.
+func deduplicateConsecutive(events []*event.ActivityEvent) []*event.ActivityEvent {
+	if len(events) == 0 {
+		return events
+	}
+	out := events[:1]
+	for i := 1; i < len(events); i++ {
+		if eventDedupeKey(events[i]) != eventDedupeKey(events[i-1]) {
+			out = append(out, events[i])
+		}
+	}
+	return out
+}
+
+// eventDedupeKey returns a string that identifies an event's logical content
+// for deduplication purposes.
+func eventDedupeKey(e *event.ActivityEvent) string {
+	proj := e.Labels["project"]
+	switch e.Source {
+	case event.SourceShell:
+		return fmt.Sprintf("shell|%s|%s", proj, payloadString(e.Payload, "command"))
+	case event.SourceClaude, event.SourceCodex, event.SourceCursor, event.SourceOpenCode:
+		return fmt.Sprintf("%s|%s|%s", e.Source, proj, payloadString(e.Payload, "message"))
+	default:
+		return fmt.Sprintf("%s|%s|%s", e.Source, e.Type, proj)
+	}
 }
 
 func formatEventLine(e *event.ActivityEvent, t time.Time) string {
 	ts := t.Format("15:04")
 	project := e.Labels["project"]
-	proj := ""
-	if project != "" {
-		proj = fmt.Sprintf(" `[%s]`", project)
+
+	// For shell events, prefer the full cwd over the bare project name so the
+	// agent can distinguish /root/code/foo from /home/user/foo.
+	var proj string
+	if e.Source == event.SourceShell {
+		cwd := e.Labels["cwd"]
+		if cwd != "" {
+			proj = fmt.Sprintf(" `[%s]`", cwd)
+		} else if project != "" {
+			proj = fmt.Sprintf(" `[%s]`", project)
+		}
+	} else {
+		if project != "" {
+			proj = fmt.Sprintf(" `[%s]`", project)
+		}
 	}
 
 	var detail string
@@ -200,9 +388,13 @@ func formatEventLine(e *event.ActivityEvent, t time.Time) string {
 			detail = fmt.Sprintf("%s", e.Type)
 		}
 
-	case event.SourceClaude:
+	case event.SourceClaude, event.SourceCodex, event.SourceCursor, event.SourceOpenCode:
 		msg := payloadString(e.Payload, "message")
+		// Session/conversation identifier (differs by tool)
 		sessionID := e.Labels["session_id"]
+		if sessionID == "" {
+			sessionID = e.Labels["conversation_id"]
+		}
 		sessionShort := ""
 		if len(sessionID) >= 8 {
 			sessionShort = fmt.Sprintf(" · session `%s…`", sessionID[:8])

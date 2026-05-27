@@ -34,10 +34,25 @@ type Filter struct {
 	MaxSensitivity event.SensitivityLevel `mapstructure:"max_sensitivity"` // 0 defaults to 2
 }
 
+// InjectTargetConfig describes one file to inject the memory section into.
+type InjectTargetConfig struct {
+	// Path is the target file (e.g. ~/.hermes/memories/MEMORY.md).
+	Path string `mapstructure:"path"`
+	// Header overrides the default section heading inside the injected block.
+	// Defaults to "## OpenContext — Recent Activity".
+	Header string `mapstructure:"header"`
+}
+
 // MemoryConfig defines where compiled memory is written.
 type MemoryConfig struct {
-	Backend MemoryBackendType `mapstructure:"backend"`
-	Path    string            `mapstructure:"path"` // for backend=file
+	Backend  MemoryBackendType `mapstructure:"backend"`
+	Path     string            `mapstructure:"path"`      // for backend=file/raw_dump
+	ClaudeMD string            `mapstructure:"claude_md"` // path to CLAUDE.md to append @ reference
+
+	// InjectTargets lists additional files to inject the memory section into.
+	// Useful for pushing context into Hermes (MEMORY.md), OpenClaw (MEMORY.md),
+	// or any other agent that reads a Markdown memory file.
+	InjectTargets []InjectTargetConfig `mapstructure:"inject_targets"`
 }
 
 // LLMConfig defines optional LLM summarization for this subscription.
@@ -92,10 +107,14 @@ func (s *Subscription) LLMSummarizerConfig() *summarizer.LLMConfig {
 
 // Config is the root configuration structure for contextd.
 type Config struct {
-	DataDir       string         `mapstructure:"data_dir"`
-	ListenAddr    string         `mapstructure:"listen_addr"`
-	LogLevel      string         `mapstructure:"log_level"`
-	Subscriptions []Subscription `mapstructure:"subscriptions"`
+	DataDir        string                 `mapstructure:"data_dir"`
+	ListenAddr     string                 `mapstructure:"listen_addr"`
+	LogLevel       string                 `mapstructure:"log_level"`
+	MaxSensitivity event.SensitivityLevel `mapstructure:"max_sensitivity"` // global ingestion cap; 0 defaults to L2
+	// RetentionDays is the number of days to keep raw events.
+	// Events older than this are pruned daily. 0 disables pruning (default 90).
+	RetentionDays  int                    `mapstructure:"retention_days"`
+	Subscriptions  []Subscription         `mapstructure:"subscriptions"`
 }
 
 // DefaultConfig returns sensible defaults.
@@ -153,6 +172,11 @@ func Load(path string) (*Config, error) {
 	cfg.DataDir = expandHome(cfg.DataDir)
 	for i := range cfg.Subscriptions {
 		cfg.Subscriptions[i].Memory.Path = expandHome(cfg.Subscriptions[i].Memory.Path)
+		cfg.Subscriptions[i].Memory.ClaudeMD = expandHome(cfg.Subscriptions[i].Memory.ClaudeMD)
+		for j := range cfg.Subscriptions[i].Memory.InjectTargets {
+			cfg.Subscriptions[i].Memory.InjectTargets[j].Path =
+				expandHome(cfg.Subscriptions[i].Memory.InjectTargets[j].Path)
+		}
 	}
 
 	return &cfg, nil

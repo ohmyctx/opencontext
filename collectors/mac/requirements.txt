@@ -1,0 +1,15 @@
+# Core
+requests>=2.31.0
+pyyaml>=6.0
+
+# macOS Objective-C bridge — provides NSWorkspace, NSPasteboard, AXUIElement, etc.
+pyobjc-core>=10.0
+pyobjc-framework-Cocoa>=10.0           # NSWorkspace, NSApplication, NSPasteboard
+pyobjc-framework-ApplicationServices>=10.0  # AXUIElement (Accessibility API)
+pyobjc-framework-Quartz>=10.0         # CGWindowListCopyWindowInfo, screen info
+
+# Cross-platform mouse/keyboard hook (wraps CGEventTap internally)
+pynput>=1.7.6
+
+# Process monitoring fallback (when NSWorkspace notifications unavailable)
+psutil>=5.9

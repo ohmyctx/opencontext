@@ -11,13 +11,16 @@ import (
 type Source string
 
 const (
-	SourceShell   Source = "shell"
-	SourceGit     Source = "git"
-	SourceOS      Source = "os"
-	SourceBrowser Source = "browser"
-	SourceIDE     Source = "ide"
-	SourceIM      Source = "im"
-	SourceClaude  Source = "claude"
+	SourceShell    Source = "shell"
+	SourceGit      Source = "git"
+	SourceOS       Source = "os"
+	SourceBrowser  Source = "browser"
+	SourceIDE      Source = "ide"
+	SourceIM       Source = "im"
+	SourceClaude   Source = "claude"
+	SourceCodex    Source = "codex"    // OpenAI Codex CLI
+	SourceCursor   Source = "cursor"   // Cursor IDE agent
+	SourceOpenCode Source = "opencode" // OpenCode (sst/opencode)
 )
 
 // EventType identifies the specific activity within a Source.
@@ -37,7 +40,12 @@ const (
 	// os
 	EventTypeWindowFocus EventType = "window_focus"
 	EventTypeAppLaunch   EventType = "app_launch"
-	EventTypeSystemIdle  EventType = "system_idle"
+	EventTypeUIClick     EventType = "ui_click"
+	EventTypeTextInput   EventType = "text_input"
+	EventTypeKeyPress    EventType = "key_press"
+	EventTypeBrowserNav    EventType = "browser_nav"
+	EventTypeClipboardCopy EventType = "clipboard_copy"
+	EventTypeSystemIdle    EventType = "system_idle"
 
 	// browser
 	EventTypePageVisit EventType = "page_visit"

@@ -229,14 +229,18 @@ func (c *Collector) processFile(path string) ([]*event.ActivityEvent, error) {
 }
 
 // claudeLine is the shape of a line in a Claude Code JSONL session file.
+// Claude Code includes timestamp, session_id, and cwd on every entry.
 type claudeLine struct {
-	Type    string          `json:"type"`
-	Message *claudeMessage  `json:"message"`
+	Type      string         `json:"type"`
+	Message   *claudeMessage `json:"message"`
+	Timestamp string         `json:"timestamp"` // RFC3339, e.g. "2026-05-25T07:21:37.599Z"
+	SessionID string         `json:"sessionId"`
+	Cwd       string         `json:"cwd"`
 }
 
 type claudeMessage struct {
-	Role    string           `json:"role"`
-	Content json.RawMessage  `json:"content"`
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
 }
 
 // parseLine extracts a user message event from a JSONL line, or returns nil.
@@ -253,6 +257,22 @@ func (c *Collector) parseLine(raw []byte, filePath, sessionID, project string) *
 	text := extractText(line.Message.Content)
 	if len([]rune(text)) < MinMessageLen {
 		return nil // skip empty / tool-call stubs
+	}
+
+	// Use the actual message timestamp from the JSONL file.
+	ts := time.Now().UnixMilli()
+	if line.Timestamp != "" {
+		if t, err := time.Parse(time.RFC3339Nano, line.Timestamp); err == nil {
+			ts = t.UnixMilli()
+		}
+	}
+
+	// Prefer cwd-derived project (more accurate than path hash heuristics).
+	if line.Cwd != "" {
+		project = projectFromCwd(line.Cwd)
+	}
+	if line.SessionID != "" {
+		sessionID = line.SessionID
 	}
 
 	labels := map[string]string{
@@ -272,13 +292,32 @@ func (c *Collector) parseLine(raw []byte, filePath, sessionID, project string) *
 
 	return &event.ActivityEvent{
 		ID:          uuid.Must(uuid.NewV7()).String(),
-		Ts:          time.Now().UnixMilli(),
+		Ts:          ts,
 		Source:      event.SourceClaude,
 		Type:        event.EventTypeUserMessage,
 		Sensitivity: c.cfg.Sensitivity,
 		Labels:      labels,
 		Payload:     payload,
 	}
+}
+
+// projectFromCwd derives a project name by walking up from cwd to find .git.
+func projectFromCwd(cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	dir := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return filepath.Base(dir)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return filepath.Base(cwd)
 }
 
 // extractText pulls plain text out of a Claude content field.

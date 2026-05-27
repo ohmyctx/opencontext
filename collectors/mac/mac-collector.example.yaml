@@ -1,0 +1,27 @@
+# macOS OpenContext Collector — example configuration
+# Copy to ~/.opencontext/mac-collector.yaml and edit as needed.
+
+# contextd endpoint (default: localhost)
+contextd_url: "http://localhost:6060"
+
+# How often to flush events (seconds)
+flush_interval: 5.0
+
+# Capture text typed into input fields (Enter/Tab or focus-leave)
+collect_text_input: true
+
+# Capture raw individual keystrokes (L3 — very verbose, off by default)
+collect_raw_keys: false
+
+# Monitor clipboard (text, files, image metadata)
+collect_clipboard: true
+
+# Ignore specific apps by name or bundle ID substring
+# ignore_apps:
+#   - "1Password"
+#   - "com.apple.keychainaccess"
+
+# Skip windows whose title contains these strings
+# ignore_window_titles:
+#   - "Private Browsing"
+#   - "Incognito"

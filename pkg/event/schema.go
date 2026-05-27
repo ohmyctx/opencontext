@@ -136,12 +136,74 @@ func init() {
 			Type:        EventTypeWindowFocus,
 			Description: "User switched focus to a different application window.",
 			LabelDefs: map[string]FieldDef{
-				"app":   {Description: "Application name", Example: "cursor"},
-				"class": {Description: "Window class/type", Example: "Code"},
+				"app":      {Description: "Executable filename", Example: "chrome.exe"},
+				"app_name": {Description: "Human-readable application name from Windows version info", Example: "Google Chrome"},
+				"title":    {Description: "Window title, often contains filename and project", Example: "ingester.go - opencontext"},
+				"class":    {Description: "Window class/type", Example: "Chrome_WidgetWin_1"},
 			},
 			PayloadDefs: map[string]FieldDef{
-				"title":       {Description: "Window title, often contains filename and project", Example: "ingester.go - opencontext"},
-				"duration_ms": {Description: "How long this window had focus before switching", Example: "1800000"},
+				"exe":           {Description: "Full executable path", Example: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"},
+				"pid":           {Description: "Process ID", Example: "12345"},
+				"prev_app":      {Description: "Executable filename of the previously focused app", Example: "Weixin.exe"},
+				"prev_app_name": {Description: "Human-readable name of the previously focused app", Example: "微信"},
+				"duration_ms":   {Description: "How long this window had focus before switching", Example: "1800000"},
+			},
+		},
+		{
+			Source:      SourceOS,
+			Type:        EventTypeBrowserNav,
+			Description: "User navigated to a new page in the browser (URL changed within the same window).",
+			LabelDefs: map[string]FieldDef{
+				"app":      {Description: "Browser executable name", Example: "chrome.exe"},
+				"app_name": {Description: "Browser display name", Example: "Google Chrome"},
+				"url":      {Description: "Full URL of the new page", Example: "https://github.com/opencontext/opencontext"},
+				"title":    {Description: "Page title", Example: "opencontext/opencontext: GitHub"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"url":      {Description: "Full URL of the new page", Example: "https://github.com/opencontext/opencontext"},
+				"title":    {Description: "Page title", Example: "opencontext/opencontext: GitHub"},
+				"prev_url": {Description: "URL of the previous page", Example: "https://github.com"},
+			},
+		},
+		{
+			Source:      SourceOS,
+			Type:        EventTypeClipboardCopy,
+			Description: "User copied content to the clipboard. Reveals what the user is actively referencing or reusing across apps.",
+			LabelDefs: map[string]FieldDef{
+				"app":          {Description: "App that had focus when content was copied", Example: "chrome.exe"},
+				"app_name":     {Description: "Human-readable app name", Example: "Google Chrome"},
+				"content_type": {Description: "Clipboard content type: text, html, files, or image", Example: "text"},
+				"file_count":   {Description: "Number of files copied (content_type=files only)", Example: "3"},
+				"dimensions":   {Description: "Image dimensions (content_type=image only)", Example: "1920x1080"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"text":      {Description: "Copied text (up to 500 chars; head+tail preview for longer content)", Example: "func handleRequest(w http.ResponseWriter..."},
+				"text_len":  {Description: "Total character count of the original text", Example: "1420"},
+				"truncated": {Description: "True if content was cut due to length", Example: "true"},
+				"files":     {Description: "List of copied file paths (up to 20)", Example: "[\"C:\\Users\\me\\doc.pdf\"]"},
+				"file_count": {Description: "Total number of files copied", Example: "3"},
+				"width":     {Description: "Image width in pixels", Example: "1920"},
+				"height":    {Description: "Image height in pixels", Example: "1080"},
+				"size_kb":   {Description: "Approximate image size in KB", Example: "512"},
+			},
+		},
+		{
+			Source:      SourceOS,
+			Type:        EventTypeUIClick,
+			Description: "User clicked a UI control in an application window.",
+			LabelDefs: map[string]FieldDef{
+				"app":          {Description: "Executable filename of the active app", Example: "chrome.exe"},
+				"app_name":     {Description: "Human-readable application name", Example: "Google Chrome"},
+				"control_type": {Description: "UIA control type (e.g. ButtonControl, EditControl)", Example: "ButtonControl"},
+				"control_name": {Description: "Accessible name of the clicked control", Example: "关闭"},
+				"window_title": {Description: "Title of the window containing the clicked control", Example: "新标签页 - Google Chrome"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"button":        {Description: "Mouse button: left, right, or middle", Example: "left"},
+				"x":             {Description: "Screen X coordinate of the click", Example: "956"},
+				"y":             {Description: "Screen Y coordinate of the click", Example: "540"},
+				"class_name":    {Description: "Win32 window class of the clicked element", Example: "Chrome_RenderWidgetHostHWND"},
+				"control_value": {Description: "Current text value of the clicked editable control (L2+)", Example: "search query"},
 			},
 		},
 		{
@@ -149,9 +211,14 @@ func init() {
 			Type:        EventTypeAppLaunch,
 			Description: "An application was launched.",
 			LabelDefs: map[string]FieldDef{
-				"app": {Description: "Application name", Example: "cursor"},
+				"app":      {Description: "Executable filename", Example: "chrome.exe"},
+				"app_name": {Description: "Human-readable application name from Windows version info", Example: "Google Chrome"},
 			},
-			PayloadDefs: map[string]FieldDef{},
+			PayloadDefs: map[string]FieldDef{
+				"exe":     {Description: "Full executable path", Example: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"},
+				"pid":     {Description: "Process ID at launch time", Example: "12345"},
+				"cmdline": {Description: "First few tokens of the command line (never contains credentials)", Example: "chrome.exe --profile-directory=Default"},
+			},
 		},
 		{
 			Source:      SourceBrowser,
@@ -188,6 +255,81 @@ func init() {
 			LabelDefs: map[string]FieldDef{
 				"project":    {Description: "Project name inferred from session working directory", Example: "opencontext"},
 				"session_id": {Description: "Claude Code session UUID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
+			},
+			PayloadDefs: map[string]FieldDef{},
+		},
+		{
+			Source:      SourceCodex,
+			Type:        EventTypeUserMessage,
+			Description: "A message sent by the user in an OpenAI Codex CLI session.",
+			LabelDefs: map[string]FieldDef{
+				"project":    {Description: "Project name inferred from session working directory", Example: "opencontext"},
+				"session_id": {Description: "Codex session UUID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"message":     {Description: "The text content of the user message", Example: "Add error handling to the HTTP handler"},
+				"message_len": {Description: "Character count of the message", Example: "42"},
+				"model":       {Description: "Codex model used in this session", Example: "o4-mini"},
+			},
+		},
+		{
+			Source:      SourceCodex,
+			Type:        EventTypeSessionStart,
+			Description: "A new OpenAI Codex CLI session was started.",
+			LabelDefs: map[string]FieldDef{
+				"project":    {Description: "Project name inferred from session working directory", Example: "opencontext"},
+				"session_id": {Description: "Codex session UUID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"model": {Description: "Codex model used in this session", Example: "o4-mini"},
+			},
+		},
+		{
+			Source:      SourceCursor,
+			Type:        EventTypeUserMessage,
+			Description: "A prompt submitted by the user in the Cursor IDE agent.",
+			LabelDefs: map[string]FieldDef{
+				"project":         {Description: "Project name inferred from workspace root", Example: "opencontext"},
+				"conversation_id": {Description: "Cursor conversation ID (stable across turns)", Example: "conv-8478ea2f"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"message":     {Description: "The text content of the user prompt", Example: "Refactor the ingester to use channels"},
+				"message_len": {Description: "Character count of the prompt", Example: "42"},
+				"model":       {Description: "Model configured for this Cursor session", Example: "claude-sonnet-4-5"},
+			},
+		},
+		{
+			Source:      SourceCursor,
+			Type:        EventTypeSessionStart,
+			Description: "A new Cursor IDE agent session was started.",
+			LabelDefs: map[string]FieldDef{
+				"project":         {Description: "Project name inferred from workspace root", Example: "opencontext"},
+				"conversation_id": {Description: "Cursor conversation ID", Example: "conv-8478ea2f"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"model": {Description: "Model configured for this Cursor session", Example: "claude-sonnet-4-5"},
+			},
+		},
+		{
+			Source:      SourceOpenCode,
+			Type:        EventTypeUserMessage,
+			Description: "A message sent by the user in an OpenCode session.",
+			LabelDefs: map[string]FieldDef{
+				"project":    {Description: "Project name inferred from session working directory", Example: "opencontext"},
+				"session_id": {Description: "OpenCode session ID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"message":     {Description: "The text content of the user message", Example: "Add a REST endpoint for querying events"},
+				"message_len": {Description: "Character count of the message", Example: "42"},
+			},
+		},
+		{
+			Source:      SourceOpenCode,
+			Type:        EventTypeSessionStart,
+			Description: "A new OpenCode session was started.",
+			LabelDefs: map[string]FieldDef{
+				"project":    {Description: "Project name inferred from session working directory", Example: "opencontext"},
+				"session_id": {Description: "OpenCode session ID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
 			},
 			PayloadDefs: map[string]FieldDef{},
 		},

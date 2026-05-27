@@ -25,6 +25,12 @@ install:
 
 # ── Dev ────────────────────────────────────────────────────────────────────────
 
+.PHONY: restart
+restart: $(BINARY_CONTEXTD)
+	supervisorctl restart opencontext-contextd
+	sleep 1
+	@supervisorctl status opencontext-contextd
+
 .PHONY: run
 run: $(BINARY_CONTEXTD)
 	./$(BINARY_CONTEXTD) --log-level debug
@@ -85,7 +91,7 @@ help:
 	@echo ""
 	@echo "  build         Build contextd and oc binaries to bin/"
 	@echo "  install       Install binaries to GOPATH/bin"
-	@echo "  run           Build and start contextd in debug mode"
+	@echo "  restart       Build and restart contextd via supervisor"
 	@echo "  tidy          Run go mod tidy"
 	@echo "  test          Run all tests"
 	@echo "  vet           Run go vet"

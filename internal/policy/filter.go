@@ -46,14 +46,16 @@ func (c *Config) Compile() error {
 }
 
 // DefaultConfig returns a sensible starting configuration.
-// Allows L1 and L2, excludes trivial shell commands.
+// Allows up to L3 (clipboard, raw keys) — collectors gate individual event
+// types at their own sensitivity level; the policy default is permissive.
 func DefaultConfig() Config {
 	cfg := Config{
-		MaxSensitivity: event.SensitivityL2,
+		MaxSensitivity: event.SensitivityL3,
 		ExcludeSources: map[event.Source]bool{},
 		ExcludeCommandPatterns: []string{
-			`^\s`,                                 // leading space = shell privacy convention
-			`^(cd|ls|pwd|clear|history|exit|ll)$`, // low-value navigation
+			`^\s`,                              // leading space = shell privacy convention
+			`^(history|exit)$`,                 // always drop: reveals unrelated commands or ends session
+			`^(ls|ll|la|pwd|cd|clear|reset)$`,  // bare no-arg commands with no context value
 		},
 	}
 	_ = cfg.Compile()

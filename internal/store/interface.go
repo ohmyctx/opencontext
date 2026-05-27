@@ -18,6 +18,16 @@ type EventStore interface {
 	// Query returns events matching the filter.
 	Query(ctx context.Context, q *event.QueryRequest) ([]*event.ActivityEvent, error)
 
+	// Prune deletes events older than beforeMs (Unix milliseconds).
+	// Returns the number of rows deleted.
+	Prune(ctx context.Context, beforeMs int64) (int64, error)
+
+	// DeleteAll removes all events from the store.
+	DeleteAll(ctx context.Context) error
+
+	// DeleteBySource removes all events from the store with the given source.
+	DeleteBySource(ctx context.Context, source string) error
+
 	// Count returns the total number of stored events.
 	Count(ctx context.Context) (int64, error)
 
