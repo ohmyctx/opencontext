@@ -52,8 +52,20 @@ func buildRoot() *cobra.Command {
 		Short:   "OpenContext CLI — inspect events, trigger compiles, manage collectors",
 		Long: `oc is the command-line interface for OpenContext.
 
+Agent workflow:
+  1. Inspect commands with: oc schema --format json
+  2. Start or verify the daemon with: oc daemon install && oc status
+  3. Install selected collectors with: oc collector <name> install
+  4. Query events or trigger memory compile with JSON output
+
 Environment variables:
   OC_DAEMON_URL    OpenContext daemon base URL (default: http://localhost:6060)`,
+		Example: `  oc schema --format json
+  oc status
+  oc collectors list
+  oc collector browser-chrome install --dry-run
+  oc events --since 5m
+  oc events --since 5m --format table`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -85,6 +97,13 @@ func buildCollectorsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "collectors",
 		Short: "List collector integrations and event schemas",
+		Long: `Discover available OpenContext collector integrations and the event
+schemas they emit. Agents should use this before asking the user which
+collectors to install.`,
+		Example: `  oc collectors list
+  oc collectors list --format json
+  oc collectors info browser-chrome
+  oc collectors schemas --format json`,
 	}
 	cmd.AddCommand(buildCollectorsListCmd())
 	cmd.AddCommand(buildCollectorsInfoCmd())
@@ -96,6 +115,10 @@ func buildCollectorsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List known collector integrations",
+		Long: `List collector manifests including name, kind, version, emitted sources,
+and the command or guide used to install each collector.`,
+		Example: `  oc collectors list
+  oc collectors list --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			collectors := registry.AllCollectors()
 			if jsonOut {
@@ -120,7 +143,11 @@ func buildCollectorsInfoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "info <name>",
 		Short: "Show collector integration details",
-		Args:  cobra.ExactArgs(1),
+		Long: `Show a single collector manifest with install command, supported platforms,
+emitted sources, docs, and schema references.`,
+		Example: `  oc collectors info shell
+  oc collectors info browser-chrome --format json`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, ok := registry.LookupCollector(args[0])
 			if !ok {
@@ -161,6 +188,10 @@ func buildCollectorsSchemasCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "schemas",
 		Short: "List registered event schemas",
+		Long: `List registered event schemas. Schemas are advisory metadata for
+agents and memory rendering; events without schemas can still be ingested.`,
+		Example: `  oc collectors schemas
+  oc collectors schemas --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			schemas := event.AllSchemas()
 			sortSchemas(schemas)
@@ -186,9 +217,15 @@ func buildDaemonCmd() *cobra.Command {
 		Use:     "daemon",
 		Aliases: []string{"start", "serve"},
 		Short:   "Run the OpenContext local daemon",
-		Example: `  oc daemon
+		Long: `Run or manage the local OpenContext daemon.
+
+For interactive debugging, run it in the foreground. For normal agent
+installation, prefer oc daemon install so the daemon survives shell exits.`,
+		Example: `  oc daemon install
+  oc daemon status
+  oc daemon
   oc daemon --log-level debug
-  oc start`,
+  oc daemon restart`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDaemonForeground(cfgFile, logLevel)
 		},
@@ -237,6 +274,14 @@ func buildDaemonInstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install and start OpenContext as a background service",
+		Long: `Install and start OpenContext as a background service using the
+best local service manager available for this machine.
+
+This command is idempotent when the service is not installed. Use --force to
+replace an existing installation.`,
+		Example: `  oc daemon install
+  oc daemon install --force
+  oc daemon install --config ~/.opencontext/config.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := service.Resolve(&cfg); err != nil {
 				return err
@@ -428,6 +473,11 @@ func buildStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show OpenContext daemon health and statistics",
+		Long: `Check whether the OpenContext daemon HTTP API is reachable and return
+health statistics such as version, uptime, and stored event count.`,
+		Example: `  oc status
+  oc status --format json
+  oc status --daemon http://127.0.0.1:6060`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := client.New(daemonURL)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -466,9 +516,15 @@ func buildEventsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "events",
 		Short: "List recent activity events",
+		Long: `Query recent activity events from the local daemon.
+
+When stdout is not a TTY, output defaults to JSON for agent parsing. Use
+--format table when a human-readable table is explicitly needed.`,
 		Example: `  oc events
+  oc events --since 5m
   oc events --source shell --project opencontext --since 2h
-  oc events --query "go build" --json`,
+  oc events --query "go build" --format json
+  oc events --since 5m --format table`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := client.New(daemonURL)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -527,8 +583,11 @@ func buildEventsCmd() *cobra.Command {
 	clearCmd := &cobra.Command{
 		Use:   "clear",
 		Short: "Delete stored events",
+		Long: `Delete stored events from the local daemon. Use --source to delete only
+events from one source. This is destructive.`,
 		Example: `  oc events clear           # delete all events
-  oc events clear --source shell  # delete shell events only`,
+  oc events clear --source shell  # delete shell events only
+  oc events clear --source browser --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := client.New(daemonURL)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -569,8 +628,13 @@ func buildCompileCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "compile",
 		Short: "Trigger memory compilation for a subscription",
+		Long: `Trigger memory compilation for one subscription or all subscriptions.
+
+Compilation is asynchronous. After triggering, inspect the configured
+memory.md path or wait for the raw_dump refresh interval.`,
 		Example: `  oc compile
-  oc compile --subscription opencontext-project`,
+  oc compile --subscription opencontext-project
+  oc compile --subscription claudecode-context --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := client.New(daemonURL)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -613,6 +677,13 @@ func buildCollectorCmd() *cobra.Command {
 	collector := &cobra.Command{
 		Use:   "collector",
 		Short: "Collector management subcommands",
+		Long: `Install or operate collector integrations. Most commands under this
+tree make local configuration changes, so agents should inspect the command
+schema first and use --dry-run when available.`,
+		Example: `  oc schema collector shell install --format json
+  oc collector shell install
+  oc collector claude install
+  oc collector browser-chrome install --dry-run`,
 	}
 	collector.AddCommand(buildShellCollectorCmd())
 	collector.AddCommand(buildClaudeCollectorCmd())
@@ -627,6 +698,11 @@ func buildShellCollectorCmd() *cobra.Command {
 	shell := &cobra.Command{
 		Use:   "shell",
 		Short: "Shell collector commands",
+		Long: `Install shell hooks or push shell command events. The push subcommand
+is intended for generated hook scripts; users usually only run install.`,
+		Example: `  oc collector shell install
+  oc collector shell install --sensitivity 2
+  oc collector shell push --command "go test ./..." --cwd "$PWD" --sensitivity 2`,
 	}
 	shell.AddCommand(buildShellPushCmd())
 	shell.AddCommand(buildShellInstallCmd())
@@ -648,6 +724,8 @@ func buildShellPushCmd() *cobra.Command {
 		Long: `Push is called by shell hook scripts (zsh preexec/precmd) to record
 a command execution event. It runs non-blocking and silently ignores
 the OpenContext daemon being unavailable.`,
+		Example: `  oc collector shell push --command "go test ./..." --exit-code 0 --duration-ms 1200 --cwd "$PWD"
+  oc collector shell push --command "git status" --sensitivity 1`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if command == "" {
 				return nil // empty commands are silently dropped
@@ -738,6 +816,10 @@ func buildClaudeCollectorCmd() *cobra.Command {
 	claude := &cobra.Command{
 		Use:   "claude",
 		Short: "Claude Code hook collector commands",
+		Long: `Install Claude Code HTTP hooks so user prompts and session starts are
+posted to the OpenContext daemon.`,
+		Example: `  oc collector claude install
+  oc collector claude install --daemon http://127.0.0.1:6060`,
 	}
 	claude.AddCommand(buildClaudeInstallCmd())
 	return claude
@@ -766,6 +848,10 @@ func buildCodexCollectorCmd() *cobra.Command {
 	codex := &cobra.Command{
 		Use:   "codex",
 		Short: "OpenAI Codex CLI hook collector commands",
+		Long: `Install Codex CLI hook scripts so user prompts and session starts are
+posted to the OpenContext daemon.`,
+		Example: `  oc collector codex install
+  oc collector codex install --daemon http://127.0.0.1:6060`,
 	}
 	codex.AddCommand(buildCodexInstallCmd())
 	return codex
@@ -795,6 +881,10 @@ func buildCursorCollectorCmd() *cobra.Command {
 	cursor := &cobra.Command{
 		Use:   "cursor",
 		Short: "Cursor IDE agent hook collector commands",
+		Long: `Install Cursor hook scripts so agent prompt submissions and session
+starts are posted to the OpenContext daemon.`,
+		Example: `  oc collector cursor install
+  oc collector cursor install --daemon http://127.0.0.1:6060`,
 	}
 	cursor.AddCommand(buildCursorInstallCmd())
 	return cursor
@@ -824,6 +914,10 @@ func buildOpenCodeCollectorCmd() *cobra.Command {
 	opencode := &cobra.Command{
 		Use:   "opencode",
 		Short: "OpenCode (sst/opencode) hook collector commands",
+		Long: `Install OpenCode hook scripts so user messages and session starts are
+posted to the OpenContext daemon.`,
+		Example: `  oc collector opencode install
+  oc collector opencode install --daemon http://127.0.0.1:6060`,
 	}
 	opencode.AddCommand(buildOpenCodeInstallCmd())
 	return opencode
@@ -1317,6 +1411,9 @@ own memory is never overwritten:
   ## OpenContext — Recent Activity
   ...generated content...
   <!-- opencontext:end -->`,
+		Example: `  oc inject hermes
+  oc inject openclaw
+  oc inject hermes --memory ~/.hermes/memories/MEMORY.md`,
 	}
 	cmd.AddCommand(buildInjectHermesCmd())
 	cmd.AddCommand(buildInjectOpenClawCmd())
