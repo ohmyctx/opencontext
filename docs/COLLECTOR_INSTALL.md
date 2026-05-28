@@ -131,51 +131,28 @@ cd ~/.opencontext/collectors/opencontext/collectors/mac
 bash install.sh
 ```
 
-This creates a local `.venv`, installs Python dependencies, and builds a packaged macOS app:
+This creates a local `.venv`, installs dependencies, and builds:
 
 ```text
 ~/Applications/OpenContextCollector.app
 ```
 
-The packaged app is the primary macOS permission target and is also used by the LaunchAgent background service. The installer also attempts to trigger the macOS Accessibility permission prompt and opens the matching System Settings page. A Python permission fallback is only needed if the installer explicitly reports fallback launcher mode.
+The user adds **only this app** in Accessibility (not Python, Warp, or Terminal).
 
 ### Permissions
 
-Ask the user to grant Accessibility permission:
-
 ```text
-System Settings -> Privacy & Security -> Accessibility
+System Settings -> Privacy & Security -> Accessibility -> OpenContextCollector.app ON
 ```
-
-Add and enable `~/Applications/OpenContextCollector.app`, then run `bash run.sh --check-permissions`.
-
-If the installer reports fallback launcher mode and the check still reports `"accessibility": false`, macOS is applying TCC to the Python process that runs the collector. Reveal the exact Python executable and add it too:
 
 ```bash
-open -R ~/.opencontext/collectors/opencontext/collectors/mac/.venv/bin/python
+bash grant-accessibility.sh
+bash run.sh --check-permissions   # on the Mac, not SSH
 ```
 
-Or use the file picker shortcut `Cmd+Shift+G` and paste the full path printed by `install.sh`.
+After reinstalling, remove stale OpenContext Collector rows and add the app again.
 
-Without this permission, app launch and clipboard monitoring can still work, but window titles, browser URLs, click element names, and text input capture may be incomplete.
-
-Verify permission status on the Mac:
-
-```bash
-bash run.sh --check-permissions
-```
-
-Prompt macOS to open the Accessibility permission flow:
-
-```bash
-bash run.sh --prompt-permissions
-```
-
-Run the prompt command from Terminal, iTerm, or Warp on the Mac. Do not rely on
-a headless SSH session to request this permission; macOS may not show the TCC
-prompt for SSH-launched processes. If macOS still applies TCC to Python, use
-`open -R <python-path>` or `Cmd+Shift+G` in the file picker with the path printed
-by `install.sh`.
+Do not rely on SSH for permission verification (`verified: false` is expected).
 
 Clipboard events are `sensitivity: 3`. If they are visible with `oc events --source os --max-sensitivity 3` but absent from generated memory, update the selected subscription's `filter.max_sensitivity` to `3` only after the user explicitly agrees to L3 capture.
 
@@ -212,7 +189,6 @@ Create `~/Library/LaunchAgents/ai.opencontext.collector.mac.plist`:
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/open</string>
-    <string>-W</string>
     <string>-g</string>
     <string>__HOME__/Applications/OpenContextCollector.app</string>
     <string>--args</string>
@@ -231,9 +207,9 @@ Create `~/Library/LaunchAgents/ai.opencontext.collector.mac.plist`:
 </plist>
 ```
 
-Replace:
+Replace `__HOME__` with the user's home directory.
 
-- `__HOME__` with the user's home directory.
+Grant Accessibility to `OpenContextCollector.app` in System Settings.
 
 Then load it:
 
