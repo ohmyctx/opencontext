@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "OpenContext Browser Collector",
+  "name": "OpenContext Browser Collector for Edge",
   "version": "0.1.0",
   "description": "Collects browser activity and sends OpenContext events to the local daemon.",
   "icons": {

@@ -3,16 +3,28 @@
   "name": "OpenContext Browser Collector",
   "version": "0.1.0",
   "description": "Collects browser activity and sends OpenContext events to the local daemon.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "opencontext-collector@opencontext.ai",
+      "strict_min_version": "109.0"
+    }
+  },
   "icons": {
     "16": "images/icon16.png",
     "32": "images/icon32.png",
     "48": "images/icon48.png",
     "128": "images/icon128.png"
   },
-  "permissions": ["storage", "tabs"],
-  "host_permissions": ["http://127.0.0.1:6060/*", "http://localhost:6060/*"],
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "http://127.0.0.1:6060/*",
+    "http://localhost:6060/*"
+  ],
   "background": {
-    "service_worker": "service_worker.js"
+    "scripts": ["service_worker.js"],
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -21,7 +33,10 @@
       "run_at": "document_idle"
     }
   ],
-  "options_page": "options.html",
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "action": {
     "default_title": "OpenContext Browser Collector",
     "default_popup": "popup.html"

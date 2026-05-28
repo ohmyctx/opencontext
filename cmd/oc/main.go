@@ -691,6 +691,8 @@ schema first and use --dry-run when available.`,
 	collector.AddCommand(buildCursorCollectorCmd())
 	collector.AddCommand(buildOpenCodeCollectorCmd())
 	collector.AddCommand(buildBrowserChromeCollectorCmd())
+	collector.AddCommand(buildBrowserFirefoxCollectorCmd())
+	collector.AddCommand(buildBrowserEdgeCollectorCmd())
 	return collector
 }
 
@@ -953,6 +955,155 @@ type browserChromeInstallResult struct {
 	NextSteps     []string `json:"next_steps"`
 }
 
+func buildBrowserFirefoxCollectorCmd() *cobra.Command {
+	browser := &cobra.Command{
+		Use:     "browser-firefox",
+		Aliases: []string{"firefox"},
+		Short:   "Firefox browser extension collector commands",
+		Long: `Manage the Firefox Manifest V3 browser collector.
+
+The command prepares an unpacked extension directory. Firefox requires
+the user to load the extension from about:debugging because browsers do
+not allow silent installation of unpacked extensions.`,
+	}
+	browser.AddCommand(buildBrowserFirefoxInstallCmd())
+	return browser
+}
+
+func buildBrowserFirefoxInstallCmd() *cobra.Command {
+	var sourcePath string
+	var targetPath string
+	var daemonAddr string
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Prepare the Firefox extension collector for manual loading",
+		Long: `Copies the Firefox browser collector extension to a stable OpenContext
+directory and prints the exact Firefox UI steps the user must complete.
+
+This is idempotent and safe to rerun.`,
+		Example: `  oc collector browser-firefox install
+  oc collector browser-firefox install --json
+  oc collector browser-firefox install --source ./collectors/browser/firefox`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := installBrowserFirefoxCollector(sourcePath, targetPath, daemonAddr, dryRun)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				return printJSON(result)
+			}
+			if result.DryRun {
+				fmt.Println("Firefox browser collector dry run.")
+			} else {
+				fmt.Println("Firefox browser collector prepared.")
+			}
+			fmt.Printf("  source:    %s\n", result.SourcePath)
+			fmt.Printf("  extension: %s\n", result.ExtensionPath)
+			fmt.Printf("  daemon:    %s\n", result.DaemonURL)
+			fmt.Println("\nAsk the user to complete these Firefox steps:")
+			for i, step := range result.NextSteps {
+				fmt.Printf("  %d. %s\n", i+1, step)
+			}
+			return nil
+		},
+	}
+
+	home, _ := os.UserHomeDir()
+	cmd.Flags().StringVar(&sourcePath, "source", "", "source extension directory (default: auto-detect collectors/browser/firefox)")
+	cmd.Flags().StringVar(&targetPath, "target", filepath.Join(home, ".opencontext", "collectors", "browser", "firefox"), "target extension directory")
+	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://127.0.0.1:6060", "OpenContext daemon base URL shown in extension options")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview copy and browser steps without writing files")
+	return cmd
+}
+
+func installBrowserFirefoxCollector(sourcePath, targetPath, daemonAddr string, dryRun bool) (*browserChromeInstallResult, error) {
+	sourcePath = strings.TrimSpace(sourcePath)
+	targetPath = expandHome(strings.TrimSpace(targetPath))
+	if targetPath == "" {
+		return nil, fmt.Errorf("--target is required")
+	}
+	if sourcePath == "" {
+		var err error
+		sourcePath, err = findBrowserFirefoxSource()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sourcePath = expandHome(sourcePath)
+	}
+	sourcePath, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve source path: %w", err)
+	}
+	targetPath, err = filepath.Abs(targetPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve target path: %w", err)
+	}
+	if err := validateFirefoxExtensionDir(sourcePath); err != nil {
+		return nil, err
+	}
+	if !dryRun {
+		if err := copyDir(sourcePath, targetPath); err != nil {
+			return nil, fmt.Errorf("copy extension files: %w", err)
+		}
+	}
+	return &browserChromeInstallResult{
+		Status:        "ready",
+		SourcePath:    sourcePath,
+		ExtensionPath: targetPath,
+		DaemonURL:     daemonAddr,
+		DryRun:        dryRun,
+		NextSteps: []string{
+			"Open about:debugging#/runtime/this-firefox.",
+			"Click Load Temporary Add-on and select the manifest.json in the extension directory.",
+			"Alternatively: open about:addons, click the gear icon, Install Add-on from file.",
+			"Click the extension icon in the toolbar and set Daemon URL to " + daemonAddr + ".",
+			"Click Send Test Event, then run: oc events --source browser --since 10m.",
+		},
+	}, nil
+}
+
+func findBrowserFirefoxSource() (string, error) {
+	candidates := []string{}
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates,
+			filepath.Join(wd, "collectors", "browser", "firefox"),
+			filepath.Join(wd, "..", "collectors", "browser", "firefox"),
+		)
+	}
+	if exe, err := os.Executable(); err == nil {
+		base := filepath.Dir(exe)
+		candidates = append(candidates,
+			filepath.Join(base, "collectors", "browser", "firefox"),
+			filepath.Join(base, "..", "collectors", "browser", "firefox"),
+			filepath.Join(base, "..", "..", "collectors", "browser", "firefox"),
+		)
+	}
+	for _, candidate := range candidates {
+		if validateFirefoxExtensionDir(candidate) == nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("could not find collectors/browser/firefox; pass --source or clone https://github.com/yetanotherai/opencontext")
+}
+
+func validateFirefoxExtensionDir(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("read Firefox extension source %s: %w", path, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("Firefox extension source is not a directory: %s", path)
+	}
+	manifest := filepath.Join(path, "manifest.json")
+	if _, err := os.Stat(manifest); err != nil {
+		return fmt.Errorf("Firefox extension source missing manifest.json at %s", manifest)
+	}
+	return nil
+}
+
 func buildBrowserChromeCollectorCmd() *cobra.Command {
 	browser := &cobra.Command{
 		Use:     "browser-chrome",
@@ -1107,6 +1258,141 @@ func validateChromeExtensionDir(path string) error {
 		return fmt.Errorf("Chrome extension source missing manifest.json at %s", manifest)
 	}
 	return nil
+}
+
+func buildBrowserEdgeCollectorCmd() *cobra.Command {
+	browser := &cobra.Command{
+		Use:     "browser-edge",
+		Aliases: []string{"edge"},
+		Short:   "Edge browser extension collector commands",
+		Long: `Manage the Edge Manifest V3 browser collector (same codebase as Chrome).
+
+The command prepares an unpacked extension directory. Edge requires
+the user to load that directory from edge://extensions because browsers do
+not allow silent installation of unpacked extensions.`,
+	}
+	browser.AddCommand(buildBrowserEdgeInstallCmd())
+	return browser
+}
+
+func buildBrowserEdgeInstallCmd() *cobra.Command {
+	var sourcePath string
+	var targetPath string
+	var daemonAddr string
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Prepare the Edge extension collector for manual loading",
+		Long: `Copies the Edge browser collector extension to a stable OpenContext
+directory and prints the exact Edge UI steps the user must complete.
+
+This is idempotent and safe to rerun.`,
+		Example: `  oc collector browser-edge install
+  oc collector browser-edge install --json
+  oc collector browser-edge install --source ./collectors/browser/edge`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := installBrowserEdgeCollector(sourcePath, targetPath, daemonAddr, dryRun)
+			if err != nil {
+				return err
+			}
+			if jsonOut {
+				return printJSON(result)
+			}
+			if result.DryRun {
+				fmt.Println("Edge browser collector dry run.")
+			} else {
+				fmt.Println("Edge browser collector prepared.")
+			}
+			fmt.Printf("  source:    %s\n", result.SourcePath)
+			fmt.Printf("  extension: %s\n", result.ExtensionPath)
+			fmt.Printf("  daemon:    %s\n", result.DaemonURL)
+			fmt.Println("\nAsk the user to complete these Edge steps:")
+			for i, step := range result.NextSteps {
+				fmt.Printf("  %d. %s\n", i+1, step)
+			}
+			return nil
+		},
+	}
+
+	home, _ := os.UserHomeDir()
+	cmd.Flags().StringVar(&sourcePath, "source", "", "source extension directory (default: auto-detect collectors/browser/edge)")
+	cmd.Flags().StringVar(&targetPath, "target", filepath.Join(home, ".opencontext", "collectors", "browser", "edge"), "target extension directory")
+	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://127.0.0.1:6060", "OpenContext daemon base URL shown in extension options")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview copy and browser steps without writing files")
+	return cmd
+}
+
+func installBrowserEdgeCollector(sourcePath, targetPath, daemonAddr string, dryRun bool) (*browserChromeInstallResult, error) {
+	sourcePath = strings.TrimSpace(sourcePath)
+	targetPath = expandHome(strings.TrimSpace(targetPath))
+	if targetPath == "" {
+		return nil, fmt.Errorf("--target is required")
+	}
+	if sourcePath == "" {
+		var err error
+		sourcePath, err = findBrowserEdgeSource()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sourcePath = expandHome(sourcePath)
+	}
+	sourcePath, err := filepath.Abs(sourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve source path: %w", err)
+	}
+	targetPath, err = filepath.Abs(targetPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve target path: %w", err)
+	}
+	if err := validateChromeExtensionDir(sourcePath); err != nil {
+		return nil, err
+	}
+	if !dryRun {
+		if err := copyDir(sourcePath, targetPath); err != nil {
+			return nil, fmt.Errorf("copy extension files: %w", err)
+		}
+	}
+	return &browserChromeInstallResult{
+		Status:        "ready",
+		SourcePath:    sourcePath,
+		ExtensionPath: targetPath,
+		DaemonURL:     daemonAddr,
+		DryRun:        dryRun,
+		NextSteps: []string{
+			"Open edge://extensions.",
+			"Enable Developer mode.",
+			"Click Load unpacked.",
+			"Select " + targetPath + ".",
+			"Open the OpenContext extension options and set Daemon URL to " + daemonAddr + ".",
+			"Click Send Test Event, then run: oc events --source browser --since 10m.",
+		},
+	}, nil
+}
+
+func findBrowserEdgeSource() (string, error) {
+	candidates := []string{}
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates,
+			filepath.Join(wd, "collectors", "browser", "edge"),
+			filepath.Join(wd, "..", "collectors", "browser", "edge"),
+		)
+	}
+	if exe, err := os.Executable(); err == nil {
+		base := filepath.Dir(exe)
+		candidates = append(candidates,
+			filepath.Join(base, "collectors", "browser", "edge"),
+			filepath.Join(base, "..", "collectors", "browser", "edge"),
+			filepath.Join(base, "..", "..", "collectors", "browser", "edge"),
+		)
+	}
+	for _, candidate := range candidates {
+		if validateChromeExtensionDir(candidate) == nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("could not find collectors/browser/edge; pass --source or clone https://github.com/yetanotherai/opencontext")
 }
 
 func copyDir(src, dst string) error {

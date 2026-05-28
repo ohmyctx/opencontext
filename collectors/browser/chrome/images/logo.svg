@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <!-- background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#bg)"/>
+  <!-- outer ring -->
+  <circle cx="64" cy="64" r="46" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="6"/>
+  <!-- inner ring -->
+  <circle cx="64" cy="64" r="30" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="5"/>
+  <!-- center dot -->
+  <circle cx="64" cy="64" r="12" fill="white"/>
+  <!-- orbit dot -->
+  <circle cx="98" cy="36" r="7" fill="rgba(255,255,255,0.9)"/>
+</svg>
