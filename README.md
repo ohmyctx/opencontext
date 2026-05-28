@@ -26,7 +26,7 @@ AI coding agents are powerful, but they start most sessions without memory of wh
 ## Quick Start
 
 ```bash
-npm install -g @yetanotherai/opencontext
+npm install -g @ohmyctx/opencontext
 oc --version
 
 oc daemon
@@ -213,7 +213,7 @@ Commands starting with a space are never recorded by the shell collector.
 ## Build From Source
 
 ```bash
-git clone https://github.com/yetanotherai/opencontext.git
+git clone https://github.com/ohmyctx/opencontext.git
 cd opencontext
 make build
 ./bin/oc --version

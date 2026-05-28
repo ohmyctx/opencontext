@@ -11,7 +11,7 @@ const path = require("path");
 const PACKAGE = require("./package.json");
 const VERSION = `v${PACKAGE.version}`;
 const NAME = "oc";
-const GITHUB_REPO = "yetanotherai/opencontext";
+const GITHUB_REPO = "ohmyctx/opencontext";
 
 const PLATFORM_MAP = {
   darwin: "darwin",

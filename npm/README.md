@@ -3,7 +3,7 @@
 This package installs the `oc` binary from OpenContext GitHub Releases. Release archives also include the Chrome extension collector under `collectors/browser/chrome`, so `oc collector browser-chrome install` can prepare it after npm installation.
 
 ```bash
-npm install -g @yetanotherai/opencontext
+npm install -g @ohmyctx/opencontext
 oc --version
 oc daemon
 ```

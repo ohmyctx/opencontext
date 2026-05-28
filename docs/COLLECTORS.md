@@ -416,8 +416,8 @@ import (
     "context"
     "time"
 
-    "github.com/yetanotherai/opencontext/pkg/client"
-    "github.com/yetanotherai/opencontext/pkg/event"
+    "github.com/ohmyctx/opencontext/pkg/client"
+    "github.com/ohmyctx/opencontext/pkg/event"
 )
 
 func main() {
@@ -567,7 +567,7 @@ When you introduce a new `source.type` pair, consider registering a schema so `m
 ### In Go (add to your collector's `init()`)
 
 ```go
-import "github.com/yetanotherai/opencontext/pkg/event"
+import "github.com/ohmyctx/opencontext/pkg/event"
 
 func init() {
     event.RegisterSchema(&event.EventTypeSchema{
@@ -687,4 +687,4 @@ Before publishing your collector, verify:
 
 ---
 
-*For questions or to contribute a collector, open an issue at [github.com/yetanotherai/opencontext](https://github.com/yetanotherai/opencontext).*
+*For questions or to contribute a collector, open an issue at [github.com/ohmyctx/opencontext](https://github.com/ohmyctx/opencontext).*

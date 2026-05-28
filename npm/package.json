@@ -1,5 +1,5 @@
 {
-  "name": "@yetanotherai/opencontext",
+  "name": "@ohmyctx/opencontext",
   "version": "0.1.0",
   "description": "Local-first work context daemon and CLI for AI agents",
   "keywords": [
@@ -9,10 +9,10 @@
     "memory",
     "cli"
   ],
-  "homepage": "https://github.com/yetanotherai/opencontext",
+  "homepage": "https://github.com/ohmyctx/opencontext",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yetanotherai/opencontext.git"
+    "url": "https://github.com/ohmyctx/opencontext.git"
   },
   "license": "MIT",
   "publishConfig": {

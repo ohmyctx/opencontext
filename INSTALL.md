@@ -91,7 +91,7 @@ Rules for agents:
 Use this when Node.js and npm are available:
 
 ```bash
-npm install -g @yetanotherai/opencontext
+npm install -g @ohmyctx/opencontext
 oc --version
 ```
 
@@ -99,7 +99,7 @@ oc --version
 
 If npm is not available, download the matching archive from:
 
-https://github.com/yetanotherai/opencontext/releases
+https://github.com/ohmyctx/opencontext/releases
 
 Expected asset names:
 
@@ -115,7 +115,7 @@ Expected asset names:
 Requires Go 1.22+:
 
 ```bash
-git clone https://github.com/yetanotherai/opencontext.git
+git clone https://github.com/ohmyctx/opencontext.git
 cd opencontext
 make build
 ./bin/oc --version
@@ -201,7 +201,7 @@ If `oc collector browser-chrome install` cannot find the extension source, clone
 
 ```bash
 mkdir -p ~/.opencontext/collectors
-git clone --depth 1 https://github.com/yetanotherai/opencontext.git ~/.opencontext/collectors/opencontext
+git clone --depth 1 https://github.com/ohmyctx/opencontext.git ~/.opencontext/collectors/opencontext
 oc collector browser-chrome install \
   --source ~/.opencontext/collectors/opencontext/collectors/browser/chrome \
   --format json

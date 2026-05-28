@@ -92,7 +92,7 @@ Otherwise clone a copy under `~/.opencontext/collectors/opencontext`:
 
 ```bash
 mkdir -p ~/.opencontext/collectors
-git clone --depth 1 https://github.com/yetanotherai/opencontext.git ~/.opencontext/collectors/opencontext
+git clone --depth 1 https://github.com/ohmyctx/opencontext.git ~/.opencontext/collectors/opencontext
 ```
 
 If the directory already exists, update it:
@@ -203,7 +203,7 @@ If the collector source is not already on Windows, clone it from PowerShell:
 ```powershell
 $dst = Join-Path $env:USERPROFILE ".opencontext\collectors\opencontext"
 New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
-git clone --depth 1 https://github.com/yetanotherai/opencontext.git $dst
+git clone --depth 1 https://github.com/ohmyctx/opencontext.git $dst
 ```
 
 ### Install
