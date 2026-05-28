@@ -131,13 +131,13 @@ cd ~/.opencontext/collectors/opencontext/collectors/mac
 bash install.sh
 ```
 
-This creates a local `.venv`, installs Python dependencies, and creates:
+This creates a local `.venv`, installs Python dependencies, and builds a packaged macOS app:
 
 ```text
 ~/Applications/OpenContextCollector.app
 ```
 
-The app wrapper is the primary macOS permission target and is also used by the LaunchAgent background service. The installer also attempts to trigger the macOS Accessibility permission prompt and opens the matching System Settings page.
+The packaged app is the primary macOS permission target and is also used by the LaunchAgent background service. The installer also attempts to trigger the macOS Accessibility permission prompt and opens the matching System Settings page. A Python permission fallback is only needed if the installer explicitly reports fallback launcher mode.
 
 ### Permissions
 
@@ -149,7 +149,7 @@ System Settings -> Privacy & Security -> Accessibility
 
 Add and enable `~/Applications/OpenContextCollector.app`, then run `bash run.sh --check-permissions`.
 
-If the check still reports `"accessibility": false`, macOS is applying TCC to the Python process that runs the collector. Reveal the exact Python executable and add it too:
+If the installer reports fallback launcher mode and the check still reports `"accessibility": false`, macOS is applying TCC to the Python process that runs the collector. Reveal the exact Python executable and add it too:
 
 ```bash
 open -R ~/.opencontext/collectors/opencontext/collectors/mac/.venv/bin/python
@@ -211,9 +211,11 @@ Create `~/Library/LaunchAgents/ai.opencontext.collector.mac.plist`:
   <string>ai.opencontext.collector.mac</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/bash</string>
-    <string>-lc</string>
-    <string>exec __HOME__/Applications/OpenContextCollector.app/Contents/MacOS/opencontext-collector</string>
+    <string>/usr/bin/open</string>
+    <string>-W</string>
+    <string>-g</string>
+    <string>__HOME__/Applications/OpenContextCollector.app</string>
+    <string>--args</string>
   </array>
   <key>WorkingDirectory</key>
   <string>__HOME__</string>

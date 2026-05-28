@@ -33,7 +33,7 @@ The shell and agent hook collectors are bundled in `oc`. The Chrome collector is
 
 The macOS and Windows activity collectors push directly to `oc daemon` in a normal install. Do not ask users to set up JSONL files or bridge scripts; those are local development helpers for unusual WSL2/network setups.
 
-The macOS installer creates `~/Applications/OpenContextCollector.app` and uses it as the primary Accessibility permission target. Ask the user to add that app in System Settings, then run the permission check. If macOS still reports Accessibility as false, use the `open -R <python-path>` command printed by the installer so the user can add the exact Python executable without browsing hidden folders manually.
+The macOS installer builds a packaged `~/Applications/OpenContextCollector.app` and uses it as the primary Accessibility permission target. Ask the user to add that app in System Settings, then run the permission check. A Python permission fallback is only needed if packaging fails and the installer says it is using fallback launcher mode.
 
 ## Ask The User First
 

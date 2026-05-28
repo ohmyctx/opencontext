@@ -26,7 +26,9 @@ VENV="$SCRIPT_DIR/.venv"
 APP_DIR="$HOME/Applications/OpenContextCollector.app"
 APP_MACOS="$APP_DIR/Contents/MacOS"
 APP_RESOURCES="$APP_DIR/Contents/Resources"
-APP_EXEC="$APP_MACOS/opencontext-collector"
+APP_EXEC="$APP_MACOS/OpenContextCollector"
+FALLBACK_APP_EXEC="$APP_MACOS/opencontext-collector"
+PACKAGED_APP=0
 
 # ── Python ────────────────────────────────────────────────────────────────────
 if command -v python3 &>/dev/null; then
@@ -58,8 +60,32 @@ echo "Installing dependencies …"
 "$VENV/bin/pip" install --quiet -r "$SCRIPT_DIR/requirements.txt"
 
 echo "Creating OpenContext Collector.app launcher …"
-mkdir -p "$APP_MACOS" "$APP_RESOURCES"
-if command -v clang >/dev/null 2>&1; then
+BUILD_DIR="$SCRIPT_DIR/.build-app"
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR" "$HOME/Applications"
+if "$VENV/bin/python" -m PyInstaller \
+  --noconfirm \
+  --clean \
+  --windowed \
+  --name OpenContextCollector \
+  --osx-bundle-identifier ai.opencontext.collector.mac \
+  --distpath "$BUILD_DIR/dist" \
+  --workpath "$BUILD_DIR/work" \
+  --specpath "$BUILD_DIR" \
+  "$SCRIPT_DIR/collector.py" >/tmp/opencontext-mac-pyinstaller.log 2>&1; then
+  rm -rf "$APP_DIR"
+  cp -R "$BUILD_DIR/dist/OpenContextCollector.app" "$APP_DIR"
+  APP_EXEC="$APP_DIR/Contents/MacOS/OpenContextCollector"
+  PACKAGED_APP=1
+  if command -v codesign >/dev/null 2>&1; then
+    codesign --force --deep --sign - "$APP_DIR" >/tmp/opencontext-mac-codesign.log 2>&1 || true
+  fi
+else
+  echo "WARNING: failed to build packaged app; falling back to a launcher app."
+  echo "         See /tmp/opencontext-mac-pyinstaller.log for details."
+  APP_EXEC="$FALLBACK_APP_EXEC"
+  mkdir -p "$APP_MACOS" "$APP_RESOURCES"
+  if command -v clang >/dev/null 2>&1; then
   LAUNCHER_C="$APP_RESOURCES/opencontext-collector-launcher.c"
   cat > "$LAUNCHER_C" <<C
 #include <unistd.h>
@@ -94,15 +120,15 @@ int main(int argc, char *argv[]) {
 }
 C
   clang -Os "$LAUNCHER_C" -o "$APP_EXEC"
-else
-  cat > "$APP_EXEC" <<APP
+  else
+    cat > "$APP_EXEC" <<APP
 #!/usr/bin/env bash
 cd "$SCRIPT_DIR"
 exec "$VENV/bin/python" "$SCRIPT_DIR/collector.py" "\$@"
 APP
-  chmod +x "$APP_EXEC"
-fi
-cat > "$APP_DIR/Contents/Info.plist" <<PLIST
+    chmod +x "$APP_EXEC"
+  fi
+  cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -124,6 +150,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+fi
 
 echo ""
 echo "Checking macOS Accessibility permission …"
@@ -138,7 +165,9 @@ if [[ "$ACCESSIBILITY_OK" -eq 0 && "$PROMPT_PERMISSIONS" -eq 1 ]]; then
   "$APP_EXEC" --prompt-permissions >/tmp/opencontext-mac-permission.json 2>/dev/null || true
   open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" >/dev/null 2>&1 || true
   open -R "$APP_DIR" >/dev/null 2>&1 || true
-  open -R "$VENV/bin/python" >/dev/null 2>&1 || true
+  if [[ "$PACKAGED_APP" -eq 0 ]]; then
+    open -R "$VENV/bin/python" >/dev/null 2>&1 || true
+  fi
 fi
 
 echo ""
@@ -150,15 +179,18 @@ if [[ "$ACCESSIBILITY_OK" -eq 0 ]]; then
   echo "     System Settings → Privacy & Security → Accessibility"
   echo "     Add and enable this app:"
   echo "     $APP_DIR"
-  echo ""
-  echo "     Then run the check below. If it is still false, add this Python executable too:"
-  echo "     $VENV/bin/python"
-  echo ""
-  echo "     To reveal it in Finder:"
-  echo "     open -R \"$VENV/bin/python\""
-  echo ""
-  echo "     Or in the file picker press Cmd+Shift+G and paste:"
-  echo "     $VENV/bin/python"
+  if [[ "$PACKAGED_APP" -eq 0 ]]; then
+    echo ""
+    echo "     This install is using a fallback launcher app. If the check below is still false,"
+    echo "     add this Python executable too:"
+    echo "     $VENV/bin/python"
+    echo ""
+    echo "     To reveal it in Finder:"
+    echo "     open -R \"$VENV/bin/python\""
+    echo ""
+    echo "     Or in the file picker press Cmd+Shift+G and paste:"
+    echo "     $VENV/bin/python"
+  fi
   echo ""
   echo "     Verify after granting:"
   echo "     bash $SCRIPT_DIR/run.sh --check-permissions"

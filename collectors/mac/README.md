@@ -27,7 +27,7 @@ bash install.sh
 ```
 
 This creates a `.venv`, installs all Python dependencies (`pyobjc`, `pynput`, etc.),
-and creates `~/Applications/OpenContextCollector.app` as a stable permission
+and builds a packaged `~/Applications/OpenContextCollector.app` as the permission
 target. It also attempts to show the macOS Accessibility prompt and opens the
 matching System Settings page.
 
@@ -39,7 +39,7 @@ Go to **System Settings → Privacy & Security → Accessibility** and add:
 ~/Applications/OpenContextCollector.app
 ```
 
-Then run `bash run.sh --check-permissions`. If it still reports
+Then run `bash run.sh --check-permissions`. If the installer reported fallback launcher mode and the check still reports
 `"accessibility": false`, macOS is applying the permission to the Python process.
 Run this command to reveal the exact executable in Finder, then drag or add it
 from the Accessibility picker:
@@ -70,7 +70,7 @@ Run the prompt command from Terminal or iTerm on the Mac. A collector started
 from a headless SSH session may not be able to display the macOS permission
 prompt. If the collector runs via LaunchAgent, grant Accessibility access to
 the terminal app used during setup and, if macOS shows it separately, the
-`~/Applications/OpenContextCollector.app`. This is also the executable used by the background LaunchAgent. If the permission check is still false, reveal and enable the Python executable shown by `install.sh`.
+`~/Applications/OpenContextCollector.app`. This is also the app launched by the background LaunchAgent. A Python permission fallback is only needed if `install.sh` explicitly reports fallback launcher mode.
 
 Clipboard events are captured through `NSPasteboard` and normally do not require
 Accessibility permission, but they are L3 events. They only appear in generated
@@ -83,7 +83,7 @@ memory when the selected subscription allows `max_sensitivity: 3`.
 bash run.sh
 
 # Start through the permission-friendly app wrapper
-"$HOME/Applications/OpenContextCollector.app/Contents/MacOS/opencontext-collector"
+"$HOME/Applications/OpenContextCollector.app/Contents/MacOS/OpenContextCollector"
 
 # Debug mode (verbose logging)
 bash run.sh --debug

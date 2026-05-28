@@ -13,3 +13,7 @@ pynput>=1.7.6
 
 # Process monitoring fallback (when NSWorkspace notifications unavailable)
 psutil>=5.9
+
+# Packaging: builds a real macOS .app so Accessibility can be granted to
+# OpenContextCollector.app instead of a virtualenv Python executable.
+pyinstaller>=6.0
