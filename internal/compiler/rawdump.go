@@ -263,7 +263,8 @@ func renderRawDump(sub *subscription.Subscription, events []*event.ActivityEvent
 
 	sb.WriteString("---\n\n")
 
-	// Schema reference section — helps the agent interpret fields without guessing
+	// Optional schema reference section — helps the agent interpret registered
+	// event types without making raw rendering depend on collector-specific code.
 	sb.WriteString("## Event Type Reference\n\n")
 	sb.WriteString("| Type | Meaning | Key fields |\n")
 	sb.WriteString("|------|---------|------------|\n")
@@ -342,162 +343,69 @@ func deduplicateConsecutive(events []*event.ActivityEvent) []*event.ActivityEven
 // for deduplication purposes.
 func eventDedupeKey(e *event.ActivityEvent) string {
 	proj := e.Labels["project"]
-	switch e.Source {
-	case event.SourceShell:
-		return fmt.Sprintf("shell|%s|%s", proj, payloadString(e.Payload, "command"))
-	case event.SourceClaude, event.SourceCodex, event.SourceCursor, event.SourceOpenCode:
-		return fmt.Sprintf("%s|%s|%s", e.Source, proj, payloadString(e.Payload, "message"))
-	default:
-		return fmt.Sprintf("%s|%s|%s", e.Source, e.Type, proj)
+	content := firstPayloadString(e.Payload,
+		"summary", "message", "text", "command", "title", "url", "href",
+		"query", "search", "file", "path", "name",
+	)
+	if content == "" {
+		content = firstLabelString(e.Labels,
+			"title", "url", "domain", "app_name", "app", "control_name", "project",
+		)
 	}
+	return fmt.Sprintf("%s|%s|%s|%s", e.Source, e.Type, proj, truncateRunes(content, 160))
 }
 
 func formatEventLine(e *event.ActivityEvent, t time.Time) string {
 	ts := t.Format("15:04")
-	project := e.Labels["project"]
-
-	// For shell events, prefer the full cwd over the bare project name so the
-	// agent can distinguish /root/code/foo from /home/user/foo.
-	var proj string
-	if e.Source == event.SourceShell {
-		cwd := e.Labels["cwd"]
-		if cwd != "" {
-			proj = fmt.Sprintf(" `[%s]`", cwd)
-		} else if project != "" {
-			proj = fmt.Sprintf(" `[%s]`", project)
-		}
-	} else {
-		if project != "" {
-			proj = fmt.Sprintf(" `[%s]`", project)
-		}
-	}
-
-	var detail string
-	switch e.Source {
-	case event.SourceShell:
-		cmd := payloadString(e.Payload, "command")
-		exit := e.Labels["exit_code"]
-		dur := payloadInt(e.Payload, "duration_ms")
-
-		status := "✓"
-		if exit != "" && exit != "0" {
-			status = fmt.Sprintf("✗ exit %s", exit)
-		}
-		durStr := ""
-		if dur > 0 {
-			durStr = fmt.Sprintf(" · %s", formatDuration(dur))
-		}
-		detail = fmt.Sprintf("`%s` → %s%s", cmd, status, durStr)
-
-	case event.SourceGit:
-		switch e.Type {
-		case event.EventTypeCommit:
-			hash := payloadString(e.Payload, "hash")
-			msg := payloadString(e.Payload, "message")
-			files := payloadInt(e.Payload, "files_changed")
-			ins := payloadInt(e.Payload, "insertions")
-			branch := e.Labels["branch"]
-			detail = fmt.Sprintf("commit `%s` on `%s`: \"%s\" (%d files, +%d)", hash, branch, msg, files, ins)
-		case event.EventTypeBranchSwitch:
-			from := payloadString(e.Payload, "from")
-			to := payloadString(e.Payload, "to")
-			detail = fmt.Sprintf("branch switch `%s` → `%s`", from, to)
-		default:
-			detail = fmt.Sprintf("%s", e.Type)
-		}
-
-	case event.SourceClaude, event.SourceCodex, event.SourceCursor, event.SourceOpenCode:
-		msg := payloadString(e.Payload, "message")
-		// Session/conversation identifier (differs by tool)
-		sessionID := e.Labels["session_id"]
-		if sessionID == "" {
-			sessionID = e.Labels["conversation_id"]
-		}
-		sessionShort := ""
-		if len(sessionID) >= 8 {
-			sessionShort = fmt.Sprintf(" · session `%s…`", sessionID[:8])
-		}
-		if msg == "" {
-			msgLen := payloadInt(e.Payload, "message_len")
-			detail = fmt.Sprintf("*(message, %d chars)%s*", msgLen, sessionShort)
-		} else {
-			if len([]rune(msg)) > 80 {
-				runes := []rune(msg)
-				msg = string(runes[:77]) + "…"
-			}
-			// escape pipe chars for markdown table safety
-			msg = strings.ReplaceAll(msg, "\n", " ↵ ")
-			detail = fmt.Sprintf("\"%s\"%s", msg, sessionShort)
-		}
-
-	case event.SourceBrowser:
-		detail = formatBrowserEvent(e)
-
-	case event.SourceIDE:
-		file := payloadString(e.Payload, "file")
-		lang := e.Labels["language"]
-		if lang != "" {
-			detail = fmt.Sprintf("`%s` (%s)", file, lang)
-		} else {
-			detail = fmt.Sprintf("`%s`", file)
-		}
-
-	default:
-		detail = fmt.Sprintf("%s", e.Type)
-		for k, v := range e.Labels {
-			if k != "project" {
-				detail += fmt.Sprintf(" %s=%s", k, v)
-			}
-		}
-	}
+	proj := formatProjectRef(e)
+	detail := formatGenericEventDetail(e)
 
 	return fmt.Sprintf("- **%s** · `%s.%s`%s · %s\n", ts, e.Source, e.Type, proj, detail)
 }
 
-func formatBrowserEvent(e *event.ActivityEvent) string {
-	domain := e.Labels["domain"]
-	title := payloadString(e.Payload, "title")
-	url := payloadString(e.Payload, "url")
-	if title == "" {
-		title = "(untitled)"
+func formatProjectRef(e *event.ActivityEvent) string {
+	if cwd := e.Labels["cwd"]; cwd != "" {
+		return fmt.Sprintf(" `[%s]`", cwd)
+	}
+	if project := e.Labels["project"]; project != "" {
+		return fmt.Sprintf(" `[%s]`", project)
+	}
+	return ""
+}
+
+func formatGenericEventDetail(e *event.ActivityEvent) string {
+	parts := []string{}
+
+	if action := firstLabelString(e.Labels, "action"); action != "" && action != string(e.Type) {
+		parts = append(parts, action)
 	}
 
-	page := fmt.Sprintf("`%s` — %s", domain, title)
-	if url != "" {
-		page += fmt.Sprintf(" · %s", shortenURL(url))
+	primary := firstPayloadString(e.Payload,
+		"summary", "message", "text", "command", "query", "search",
+	)
+	if primary != "" {
+		parts = append(parts, quoteForMarkdown(truncateRunes(primary, 140)))
 	}
 
-	switch e.Type {
-	case event.EventTypePageVisit:
-		if dur := payloadInt(e.Payload, "duration_ms"); dur > 0 {
-			return fmt.Sprintf("%s · viewed %s", page, formatDuration(dur))
-		}
-		return page
-	case event.EventTypeTabFocus:
-		return fmt.Sprintf("focused %s", page)
-	case event.EventTypeLinkClick:
-		text := payloadString(e.Payload, "text")
-		href := payloadString(e.Payload, "href")
-		return fmt.Sprintf("clicked link %q on %s%s", truncateRunes(text, 80), page, optionalArrowURL(href))
-	case event.EventTypeButtonClick:
-		text := payloadString(e.Payload, "text")
-		return fmt.Sprintf("clicked button %q on %s", truncateRunes(text, 80), page)
-	case event.EventTypeSearch:
-		text := payloadString(e.Payload, "text")
-		return fmt.Sprintf("searched %q on %s", truncateRunes(text, 100), page)
-	case event.EventTypeFormSubmit:
-		text := payloadString(e.Payload, "text")
-		return fmt.Sprintf("submitted form (%s) on %s", text, page)
-	case event.EventTypeTextInput:
-		text := payloadString(e.Payload, "text")
-		button := payloadString(e.Payload, "submit_button")
-		if button != "" {
-			return fmt.Sprintf("submitted text %q via %q on %s", truncateRunes(text, 120), button, page)
-		}
-		return fmt.Sprintf("submitted text %q on %s", truncateRunes(text, 120), page)
-	default:
-		return page
+	context := formatContextFields(e)
+	if context != "" {
+		parts = append(parts, context)
 	}
+
+	status := formatStatusFields(e)
+	if status != "" {
+		parts = append(parts, status)
+	}
+
+	extras := formatExtraFields(e, usedGenericKeys())
+	if extras != "" {
+		parts = append(parts, extras)
+	}
+
+	if len(parts) == 0 {
+		return string(e.Type)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -537,8 +445,7 @@ func payloadString(payload map[string]any, key string) string {
 	if !ok {
 		return ""
 	}
-	s, _ := v.(string)
-	return s
+	return anyToString(v)
 }
 
 func payloadInt(payload map[string]any, key string) int64 {
@@ -569,6 +476,151 @@ func truncateRunes(s string, max int) string {
 	return string(runes[:max-1]) + "…"
 }
 
+func firstPayloadString(payload map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value := payloadString(payload, key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstLabelString(labels map[string]string, keys ...string) string {
+	for _, key := range keys {
+		if value := labels[key]; value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func formatContextFields(e *event.ActivityEvent) string {
+	contexts := []string{}
+	if domain := e.Labels["domain"]; domain != "" {
+		contexts = append(contexts, "`"+domain+"`")
+	}
+	if title := payloadString(e.Payload, "title"); title != "" {
+		contexts = append(contexts, truncateRunes(title, 100))
+	} else if title := e.Labels["title"]; title != "" {
+		contexts = append(contexts, truncateRunes(title, 100))
+	} else if name := firstPayloadString(e.Payload, "name"); name != "" {
+		contexts = append(contexts, truncateRunes(name, 100))
+	} else if name := e.Labels["name"]; name != "" {
+		contexts = append(contexts, truncateRunes(name, 100))
+	}
+	if url := firstPayloadString(e.Payload, "url", "href"); url != "" {
+		contexts = append(contexts, shortenURL(url))
+	} else if url := e.Labels["url"]; url != "" {
+		contexts = append(contexts, shortenURL(url))
+	}
+	if app := firstLabelString(e.Labels, "app_name", "app"); app != "" {
+		contexts = append(contexts, app)
+	}
+	if file := firstPayloadString(e.Payload, "file", "path"); file != "" {
+		contexts = append(contexts, "`"+truncateRunes(file, 100)+"`")
+	}
+	return strings.Join(contexts, " — ")
+}
+
+func formatStatusFields(e *event.ActivityEvent) string {
+	status := []string{}
+	if exit := e.Labels["exit_code"]; exit != "" {
+		if exit == "0" {
+			status = append(status, "exit 0")
+		} else {
+			status = append(status, "exit "+exit)
+		}
+	}
+	if duration := payloadInt(e.Payload, "duration_ms"); duration > 0 {
+		status = append(status, formatDuration(duration))
+	}
+	if session := firstLabelString(e.Labels, "session_id", "conversation_id"); len(session) >= 8 {
+		status = append(status, "session `"+session[:8]+"…`")
+	}
+	return strings.Join(status, " · ")
+}
+
+func formatExtraFields(e *event.ActivityEvent, used map[string]bool) string {
+	fields := []string{}
+	for _, key := range sortedLabelKeys(e.Labels) {
+		if used[key] || key == "project" || key == "cwd" {
+			continue
+		}
+		fields = append(fields, fmt.Sprintf("%s=%s", key, truncateRunes(e.Labels[key], 60)))
+	}
+	for _, key := range sortedPayloadKeys(e.Payload) {
+		if used[key] {
+			continue
+		}
+		value := anyToString(e.Payload[key])
+		if value == "" {
+			continue
+		}
+		fields = append(fields, fmt.Sprintf("%s=%s", key, truncateRunes(value, 60)))
+	}
+	if len(fields) > 4 {
+		fields = fields[:4]
+		fields = append(fields, "…")
+	}
+	return strings.Join(fields, " ")
+}
+
+func usedGenericKeys() map[string]bool {
+	return map[string]bool{
+		"action": true, "summary": true, "message": true, "text": true,
+		"command": true, "query": true, "search": true, "title": true,
+		"name": true, "domain": true, "url": true, "href": true,
+		"app_name": true, "app": true, "file": true, "path": true,
+		"exit_code": true, "duration_ms": true, "session_id": true,
+		"conversation_id": true,
+	}
+}
+
+func sortedLabelKeys(labels map[string]string) []string {
+	keys := make([]string, 0, len(labels))
+	for key := range labels {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedPayloadKeys(payload map[string]any) []string {
+	keys := make([]string, 0, len(payload))
+	for key := range payload {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func quoteForMarkdown(s string) string {
+	s = strings.ReplaceAll(s, "\n", " ↵ ")
+	return fmt.Sprintf("%q", s)
+}
+
+func anyToString(v any) string {
+	switch value := v.(type) {
+	case string:
+		return value
+	case fmt.Stringer:
+		return value.String()
+	case int:
+		return fmt.Sprintf("%d", value)
+	case int64:
+		return fmt.Sprintf("%d", value)
+	case float64:
+		if value == float64(int64(value)) {
+			return fmt.Sprintf("%d", int64(value))
+		}
+		return fmt.Sprintf("%.2f", value)
+	case bool:
+		return fmt.Sprintf("%t", value)
+	default:
+		return ""
+	}
+}
+
 func shortenURL(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -577,14 +629,6 @@ func shortenURL(raw string) string {
 	raw = strings.TrimPrefix(raw, "https://")
 	raw = strings.TrimPrefix(raw, "http://")
 	return truncateRunes(raw, 100)
-}
-
-func optionalArrowURL(raw string) string {
-	short := shortenURL(raw)
-	if short == "" {
-		return ""
-	}
-	return " → " + short
 }
 
 func formatDuration(ms int64) string {

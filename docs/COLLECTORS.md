@@ -242,7 +242,7 @@ If you're building a collector for a tool not in the list (e.g., `docker`, `jira
 { "source": "docker", "type": "container_crash", ... }
 ```
 
-Register a schema for it (see [Section 9](#9-registering-an-event-schema)) so `memory.md` describes your event type to the LLM.
+Use common payload keys such as `summary`, `message`, `text`, `command`, `title`, and `url` when they fit. `memory.md` renders those fields generically, so a new collector does not require OpenContext code changes. A schema is recommended metadata for discovery and field descriptions, not a requirement for ingestion or raw memory output.
 
 ---
 
@@ -416,8 +416,8 @@ import (
     "context"
     "time"
 
-    "github.com/opencontext/opencontext/pkg/client"
-    "github.com/opencontext/opencontext/pkg/event"
+    "github.com/yetanotherai/opencontext/pkg/client"
+    "github.com/yetanotherai/opencontext/pkg/event"
 )
 
 func main() {
@@ -562,12 +562,12 @@ def should_push(command: str) -> bool:
 
 ## 9. Registering an Event Schema
 
-When you introduce a new `source.type` pair, register a schema so `memory.md` contains a human-readable description that helps the LLM interpret the events correctly.
+When you introduce a new `source.type` pair, consider registering a schema so `memory.md` contains a human-readable description that helps the LLM interpret the events correctly. Schemas are advisory: events without schemas are still accepted, stored, queried, and rendered through the generic raw memory formatter.
 
 ### In Go (add to your collector's `init()`)
 
 ```go
-import "github.com/opencontext/opencontext/pkg/event"
+import "github.com/yetanotherai/opencontext/pkg/event"
 
 func init() {
     event.RegisterSchema(&event.EventTypeSchema{
@@ -587,11 +587,11 @@ func init() {
 }
 ```
 
-The schema appears in the `## Event Type Reference` table in `memory.md`, giving the LLM field-level context without needing to guess.
+The schema appears in the `## Event Type Reference` table in `memory.md`, giving the LLM field-level context without needing to guess. The event line itself is still rendered from generic labels and payload fields.
 
 ### Schema registration via HTTP (future)
 
-A `POST /api/v1/schemas` endpoint is planned for collectors that are not written in Go. Until then, open a PR to add your schema to `pkg/event/schema.go`.
+A `POST /api/v1/schemas` endpoint is planned for collectors that are not written in Go. Until then, external collectors can run without schema registration; open a PR to add built-in schema metadata only when the collector should be discoverable through `oc collectors schemas`.
 
 ---
 
@@ -655,7 +655,7 @@ Before publishing your collector, verify:
 - [ ] `ts` is the timestamp **when the activity occurred**, not when the HTTP call was made
 - [ ] No empty string values in `labels` — omit the key if the value would be empty
 - [ ] `source` and `type` follow the naming conventions in [Section 5](#5-source--eventtype-conventions)
-- [ ] A schema is registered for any new `source.type` pair
+- [ ] Common summary/context fields are populated where useful; schema metadata is provided if the event type should be discoverable
 
 **Privacy**
 - [ ] Default sensitivity is L1 or L2 — never L3 without explicit user opt-in
@@ -687,4 +687,4 @@ Before publishing your collector, verify:
 
 ---
 
-*For questions or to contribute a collector, open an issue at [github.com/opencontext/opencontext](https://github.com/opencontext/opencontext).*
+*For questions or to contribute a collector, open an issue at [github.com/yetanotherai/opencontext](https://github.com/yetanotherai/opencontext).*

@@ -317,7 +317,9 @@ Response `200 OK`:
 
 ## 5. EventTypeSchema Registry
 
-The schema registry provides LLMs with semantic understanding of each event type. The Memory Compiler includes the relevant schemas in its summarization prompts.
+The schema registry provides LLMs with semantic understanding of each event type. The Memory Compiler includes relevant schemas in summarization prompts and in the `raw_dump` event type reference table.
+
+Schemas are optional metadata. The daemon accepts events without registered schemas, and `raw_dump` renders them from generic labels and payload fields. Prefer common payload keys such as `summary`, `message`, `text`, `command`, `title`, `url`, `file`, and `path` so agents get useful context even before a schema exists.
 
 ```go
 type FieldDef struct {
@@ -364,10 +366,13 @@ A Collector MUST:
 3. Omit any label or payload field that is empty or not applicable
 4. Use batch push (`/api/v1/events/batch`) for high-frequency events
 5. Tolerate the daemon being unavailable (buffer locally or drop, never crash)
-6. Register a schema for any custom EventTypes it introduces via `event.RegisterSchema()`
 
 A Collector MUST NOT:
 1. Push events with `ts = 0` or negative `ts`
 2. Include empty string values in `labels` or `payload`
 3. Block user workflows waiting for HTTP response
 4. Push L3 events unless the user has explicitly opted in
+
+A Collector SHOULD:
+1. Use common summary/context payload keys where they fit (`summary`, `message`, `text`, `command`, `title`, `url`, `file`, `path`)
+2. Register or publish schema metadata for custom event types when the collector should be discoverable by agents
