@@ -1,131 +1,38 @@
 # OpenContext macOS Collector
 
-Monitors user activity on macOS and pushes structured events to the local OpenContext daemon.
-
-## Events captured
-
-| Event type | Description | Sensitivity |
-|---|---|---|
-| `os.window_focus` | App/window in focus, URL for browsers | L1 |
-| `os.browser_nav` | URL change inside Chrome/Safari/Firefox/Edge | L2 |
-| `os.ui_click` | UI element clicked (name + role via Accessibility API) | L2 |
-| `os.text_input` | Text submitted in input fields | L2 |
-| `os.app_launch` | New application launched | L1 |
-| `os.clipboard_copy` | Clipboard content changes (text/files/image metadata) | L3 |
-| `os.key_press` | Individual keystrokes (opt-in, L3) | L3 |
-
-## Requirements
-
-- macOS 12 Monterey or later
-- Python 3.9+
-- **Accessibility permission** (for UI element inspection and keyboard monitoring)
-
-## Installation
+## 安装
 
 ```bash
 bash install.sh
 ```
 
-This creates a `.venv`, installs all Python dependencies (`pyobjc`, `pynput`, etc.),
-and builds a packaged `~/Applications/OpenContextCollector.app` as the permission
-target. It also attempts to show the macOS Accessibility prompt and opens the
-matching System Settings page.
-
-## Permissions
-
-Go to **System Settings → Privacy & Security → Accessibility** and add:
+会在 **应用程序** 里安装（可见、可勾选）：
 
 ```text
-~/Applications/OpenContextCollector.app
+~/Applications/OpenContext Collector.app
 ```
 
-Then run `bash run.sh --check-permissions`. If the installer reported fallback launcher mode and the check still reports
-`"accessibility": false`, macOS is applying the permission to the Python process.
-Run this command to reveal the exact executable in Finder, then drag or add it
-from the Accessibility picker:
+## 授权
 
 ```bash
-open -R "$PWD/.venv/bin/python"
+bash grant-accessibility.sh
 ```
 
-In the file picker you can also press `Cmd+Shift+G` and paste the Python path
-printed by `install.sh`.
+1. 先 **打开 Finder**（定位到 OpenContext Collector）
+2. 再 **打开系统设置 → 辅助功能**
+3. 点 **+** → 左侧 **应用程序** → 选 **OpenContext Collector**  
+   （若看不到：点 + 后按 **⌘⇧G**，路径已复制到剪贴板，⌘V 粘贴）
 
-Without this permission, app launch and clipboard monitoring can still work, but
-window titles, browser URLs, UI element names, and text-input capture may be incomplete.
-
-Check permission status from the Mac:
+验证：
 
 ```bash
 bash run.sh --check-permissions
 ```
 
-Ask macOS to show the Accessibility prompt:
+## 运行
 
 ```bash
-bash run.sh --prompt-permissions
-```
-
-Run the prompt command from Terminal or iTerm on the Mac. A collector started
-from a headless SSH session may not be able to display the macOS permission
-prompt. If the collector runs via LaunchAgent, grant Accessibility access to
-the terminal app used during setup and, if macOS shows it separately, the
-`~/Applications/OpenContextCollector.app`. This is also the app launched by the background LaunchAgent. A Python permission fallback is only needed if `install.sh` explicitly reports fallback launcher mode.
-
-Clipboard events are captured through `NSPasteboard` and normally do not require
-Accessibility permission, but they are L3 events. They only appear in generated
-memory when the selected subscription allows `max_sensitivity: 3`.
-
-## Usage
-
-```bash
-# Start collector (pushes to oc daemon at localhost:6060)
 bash run.sh
-
-# Start through the permission-friendly app wrapper
-"$HOME/Applications/OpenContextCollector.app/Contents/MacOS/OpenContextCollector"
-
-# Debug mode (verbose logging)
-bash run.sh --debug
-
-# Dry-run mode (print JSON events, don't push)
-bash run.sh --dry-run
-
-# Custom OpenContext daemon URL
-bash run.sh --url http://192.168.1.10:6060
 ```
 
-## Configuration
-
-```bash
-mkdir -p ~/.opencontext
-cp mac-collector.example.yaml ~/.opencontext/mac-collector.yaml
-# edit as needed
-```
-
-## macOS API overview
-
-| What we monitor | macOS API |
-|---|---|
-| App focus changes | `NSWorkspace.didActivateApplicationNotification` |
-| Window title | `AXUIElement` (Accessibility API) |
-| Browser URL | `AXUIElement` address bar or `kAXURLAttribute` |
-| Mouse clicks | `CGEventTap` (via `pynput`) |
-| Keyboard / text fields | `AXUIElement` focused element + `CGEventTap` |
-| App launches | `NSWorkspace.didLaunchApplicationNotification` |
-| Clipboard | `NSPasteboard.changeCount` polling |
-
-## Architecture
-
-```
-collector.py  ←  event Queue  ←  WindowMonitor   (NSWorkspace + AXUIElement)
-                               ←  ClickMonitor    (CGEventTap via pynput)
-                               ←  KeyboardMonitor (AXUIElement + pynput)
-                               ←  ProcessMonitor  (NSWorkspace notifications)
-                               ←  ClipboardMonitor (NSPasteboard polling)
-      ↓
-  ContextClient  →  HTTP POST  →  oc daemon (localhost:6060)
-```
-
-Every event includes platform labels such as `platform=macos`,
-`collector=opencontext-macos`, `collector_version`, and `host`.
+**不要**去 `~/.opencontext/bin` 找隐藏文件；只在 **应用程序** 里添加 **OpenContext Collector**。

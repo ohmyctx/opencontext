@@ -65,7 +65,7 @@ _cache_lock = threading.Lock()
 
 
 def check_accessibility_permission() -> bool:
-    """Return True if Accessibility permission is granted."""
+    """Return True if Accessibility permission is granted (in-process TCC cache)."""
     if not _ax_ok:
         return False
     try:
@@ -78,6 +78,135 @@ def check_accessibility_permission() -> bool:
             return bool(AXAPIEnabled())
         except Exception:
             return False
+
+
+def check_accessibility_functional() -> bool:
+    """Probe live TCC via CGEventTap creation (less cache-prone than AXIsProcessTrusted)."""
+    if not _ax_ok:
+        return False
+    try:
+        from Quartz import (  # type: ignore
+            CGEventTapCreate,
+            CGEventMaskBit,
+            kCGHIDEventTap,
+            kCGHeadInsertEventTap,
+            kCGEventTapOptionListenOnly,
+            kCGEventKeyDown,
+        )
+
+        def _callback(proxy, etype, event, refcon):  # noqa: ARG001
+            return event
+
+        mask = CGEventMaskBit(kCGEventKeyDown)
+        tap = CGEventTapCreate(
+            kCGHIDEventTap,
+            kCGHeadInsertEventTap,
+            kCGEventTapOptionListenOnly,
+            mask,
+            _callback,
+            None,
+        )
+        if tap is not None:
+            from Quartz import CFMachPortInvalidate, CGEventTapEnable  # type: ignore
+
+            CGEventTapEnable(tap, False)
+            CFMachPortInvalidate(tap)
+            return True
+        return False
+    except Exception as e:
+        logger.debug("accessibility functional probe failed: %s", e)
+        return False
+
+
+def get_session_context() -> str:
+    """Return coarse session type: gui, ssh, or unknown."""
+    import os
+
+    if os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_CLIENT"):
+        return "ssh"
+    try:
+        import subprocess
+
+        out = subprocess.run(
+            ["/usr/bin/launchctl", "managername"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        name = (out.stdout or "").strip()
+        if name.startswith("gui/"):
+            return "gui"
+        if name.startswith("user/"):
+            return "background"
+    except Exception:
+        pass
+    return "unknown"
+
+
+def get_permission_diagnostics() -> dict:
+    """Return context for Accessibility (TCC) troubleshooting."""
+    import os
+    import subprocess
+    import sys
+
+    session = get_session_context()
+    trusted = check_accessibility_permission()
+    functional = check_accessibility_functional()
+    diag: dict = {
+        "executable": sys.executable,
+        "session": session,
+        "accessibility_trusted": trusted,
+        "accessibility_functional": functional,
+        "accessibility": trusted,
+        "pyobjc_available": _ax_ok,
+        "launched_via_ssh": session == "ssh",
+    }
+
+    if sys.platform != "darwin":
+        return diag
+
+    try:
+        from Foundation import NSBundle  # type: ignore
+
+        bundle = NSBundle.mainBundle()
+        if bundle is not None:
+            diag["bundle_id"] = bundle.bundleIdentifier() or ""
+            diag["bundle_path"] = bundle.bundlePath() or ""
+    except Exception:
+        pass
+
+    try:
+        proc = subprocess.run(
+            ["codesign", "-dv", sys.executable],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        for line in (proc.stderr + proc.stdout).splitlines():
+            line = line.strip()
+            if line.startswith("Identifier="):
+                diag["codesign_identifier"] = line.split("=", 1)[1]
+            elif line.startswith("TeamIdentifier="):
+                diag["codesign_team"] = line.split("=", 1)[1]
+            elif "CDHash" in line:
+                diag["codesign_cdhash"] = line.split("=", 1)[-1].strip()
+    except Exception:
+        pass
+
+    app_path = os.path.expanduser("~/Applications/OpenContext Collector.app")
+    diag["permission_target_hint"] = (
+        "Add OpenContext Collector in System Settings → Privacy & Security → "
+        f"Accessibility (Applications folder): {app_path}"
+    )
+
+    if session == "ssh":
+        diag["ssh_note"] = (
+            "This process runs in a non-GUI SSH session. In-process checks often "
+            "return false even when OpenContextCollector.app is enabled. "
+            "Verify with bash run.sh --check-permissions on the Mac."
+        )
+
+    return diag
 
 
 def prompt_accessibility_permission() -> bool:

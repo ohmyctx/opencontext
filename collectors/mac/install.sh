@@ -23,12 +23,11 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV="$SCRIPT_DIR/.venv"
-APP_DIR="$HOME/Applications/OpenContextCollector.app"
+BUILD_DIR="$SCRIPT_DIR/.build-bin"
+APP_DIR="$HOME/Applications/OpenContext Collector.app"
 APP_MACOS="$APP_DIR/Contents/MacOS"
-APP_RESOURCES="$APP_DIR/Contents/Resources"
 APP_EXEC="$APP_MACOS/OpenContextCollector"
-FALLBACK_APP_EXEC="$APP_MACOS/opencontext-collector"
-PACKAGED_APP=0
+LEGACY_APP="$HOME/Applications/OpenContextCollector.app"
 
 # ── Python ────────────────────────────────────────────────────────────────────
 if command -v python3 &>/dev/null; then
@@ -59,76 +58,33 @@ fi
 echo "Installing dependencies …"
 "$VENV/bin/pip" install --quiet -r "$SCRIPT_DIR/requirements.txt"
 
-echo "Creating OpenContext Collector.app launcher …"
-BUILD_DIR="$SCRIPT_DIR/.build-app"
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR" "$HOME/Applications"
-if "$VENV/bin/python" -m PyInstaller \
+# Remove old app names
+for old in "$LEGACY_APP" "$HOME/Applications/OpenContextCollector.app"; do
+  [[ -d "$old" ]] && rm -rf "$old"
+done
+rm -f "$HOME/Applications/opencontext-mac-collector" 2>/dev/null || true
+
+echo "Building OpenContext Collector.app in ~/Applications …"
+rm -rf "$BUILD_DIR" "$APP_DIR"
+mkdir -p "$BUILD_DIR" "$APP_MACOS"
+if ! "$VENV/bin/python" -m PyInstaller \
   --noconfirm \
   --clean \
-  --windowed \
+  --onefile \
   --name OpenContextCollector \
-  --osx-bundle-identifier ai.opencontext.collector.mac \
   --distpath "$BUILD_DIR/dist" \
   --workpath "$BUILD_DIR/work" \
   --specpath "$BUILD_DIR" \
   "$SCRIPT_DIR/collector.py" >/tmp/opencontext-mac-pyinstaller.log 2>&1; then
-  rm -rf "$APP_DIR"
-  cp -R "$BUILD_DIR/dist/OpenContextCollector.app" "$APP_DIR"
-  APP_EXEC="$APP_DIR/Contents/MacOS/OpenContextCollector"
-  PACKAGED_APP=1
-  if command -v codesign >/dev/null 2>&1; then
-    codesign --force --deep --sign - "$APP_DIR" >/tmp/opencontext-mac-codesign.log 2>&1 || true
-  fi
-else
-  echo "WARNING: failed to build packaged app; falling back to a launcher app."
-  echo "         See /tmp/opencontext-mac-pyinstaller.log for details."
-  APP_EXEC="$FALLBACK_APP_EXEC"
-  mkdir -p "$APP_MACOS" "$APP_RESOURCES"
-  if command -v clang >/dev/null 2>&1; then
-  LAUNCHER_C="$APP_RESOURCES/opencontext-collector-launcher.c"
-  cat > "$LAUNCHER_C" <<C
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
+  echo "ERROR: failed to build collector" >&2
+  echo "       See /tmp/opencontext-mac-pyinstaller.log" >&2
+  exit 1
+fi
 
-int main(int argc, char *argv[]) {
-  const char *workdir = "$SCRIPT_DIR";
-  const char *python = "$VENV/bin/python";
-  const char *collector = "$SCRIPT_DIR/collector.py";
+cp "$BUILD_DIR/dist/OpenContextCollector" "$APP_EXEC"
+chmod +x "$APP_EXEC"
 
-  if (chdir(workdir) != 0) {
-    perror("chdir");
-    return 1;
-  }
-
-  char **args = calloc((size_t)argc + 2, sizeof(char *));
-  if (args == NULL) {
-    perror("calloc");
-    return 1;
-  }
-  args[0] = (char *)python;
-  args[1] = (char *)collector;
-  for (int i = 1; i < argc; i++) {
-    args[i + 1] = argv[i];
-  }
-  args[argc + 1] = NULL;
-
-  execv(python, args);
-  perror("execv");
-  return 1;
-}
-C
-  clang -Os "$LAUNCHER_C" -o "$APP_EXEC"
-  else
-    cat > "$APP_EXEC" <<APP
-#!/usr/bin/env bash
-cd "$SCRIPT_DIR"
-exec "$VENV/bin/python" "$SCRIPT_DIR/collector.py" "\$@"
-APP
-    chmod +x "$APP_EXEC"
-  fi
-  cat > "$APP_DIR/Contents/Info.plist" <<PLIST
+cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -144,64 +100,48 @@ APP
   <key>CFBundleShortVersionString</key>
   <string>0.1.0</string>
   <key>CFBundleExecutable</key>
-  <string>opencontext-collector</string>
-  <key>LSUIElement</key>
+  <string>OpenContextCollector</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSAccessibilityUsageDescription</key>
+  <string>OpenContext needs Accessibility to capture window titles and UI activity.</string>
 </dict>
 </plist>
 PLIST
+
+xattr -dr com.apple.quarantine "$APP_DIR" >/dev/null 2>&1 || true
+if command -v codesign >/dev/null 2>&1; then
+  codesign --force --deep --sign - "$APP_DIR" >/tmp/opencontext-mac-codesign.log 2>&1 || true
 fi
 
 echo ""
 echo "Checking macOS Accessibility permission …"
+ACCESSIBILITY_OK=0
 if "$APP_EXEC" --check-permissions >/tmp/opencontext-mac-permission.json 2>/dev/null; then
   ACCESSIBILITY_OK=1
-else
-  ACCESSIBILITY_OK=0
 fi
 
 if [[ "$ACCESSIBILITY_OK" -eq 0 && "$PROMPT_PERMISSIONS" -eq 1 ]]; then
-  echo "Opening the Accessibility permission prompt/settings page."
-  "$APP_EXEC" --prompt-permissions >/tmp/opencontext-mac-permission.json 2>/dev/null || true
-  open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" >/dev/null 2>&1 || true
-  open -R "$APP_DIR" >/dev/null 2>&1 || true
-  if [[ "$PACKAGED_APP" -eq 0 ]]; then
-    open -R "$VENV/bin/python" >/dev/null 2>&1 || true
+  echo "Starting guided Accessibility setup …"
+  chmod +x "$SCRIPT_DIR/grant-accessibility.sh" 2>/dev/null || true
+  bash "$SCRIPT_DIR/grant-accessibility.sh" || true
+  if "$APP_EXEC" --check-permissions >/tmp/opencontext-mac-permission.json 2>/dev/null; then
+    ACCESSIBILITY_OK=1
   fi
 fi
 
 echo ""
 echo "✓ Installation complete."
 echo ""
-echo "Next steps:"
+echo "Add this app in System Settings → Privacy & Security → Accessibility:"
+echo "  $APP_DIR"
+echo "  (Finder → 应用程序 / Applications → OpenContext Collector)"
+echo ""
 if [[ "$ACCESSIBILITY_OK" -eq 0 ]]; then
-  echo "  1. Grant Accessibility permission if macOS did not already show the prompt:"
-  echo "     System Settings → Privacy & Security → Accessibility"
-  echo "     Add and enable this app:"
-  echo "     $APP_DIR"
-  if [[ "$PACKAGED_APP" -eq 0 ]]; then
-    echo ""
-    echo "     This install is using a fallback launcher app. If the check below is still false,"
-    echo "     add this Python executable too:"
-    echo "     $VENV/bin/python"
-    echo ""
-    echo "     To reveal it in Finder:"
-    echo "     open -R \"$VENV/bin/python\""
-    echo ""
-    echo "     Or in the file picker press Cmd+Shift+G and paste:"
-    echo "     $VENV/bin/python"
-  fi
-  echo ""
-  echo "     Verify after granting:"
-  echo "     bash $SCRIPT_DIR/run.sh --check-permissions"
+  echo "Next: bash $SCRIPT_DIR/grant-accessibility.sh"
 else
-  echo "  1. Accessibility permission is already granted."
+  echo "Accessibility permission looks OK."
 fi
-echo ""
-echo "  2. Start the collector:"
-echo "     bash $SCRIPT_DIR/run.sh"
-echo "     or: $APP_EXEC"
-echo ""
-echo "  3. (Optional) Edit config:"
-echo "     mkdir -p ~/.opencontext"
-echo "     cp $SCRIPT_DIR/mac-collector.example.yaml ~/.opencontext/mac-collector.yaml"
+echo "Start: bash $SCRIPT_DIR/run.sh"

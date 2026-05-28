@@ -30,15 +30,6 @@ import sys
 import time
 from queue import Empty, Queue
 
-from client import OpenContextClient
-from config import Config
-from monitors.click_monitor import ClickMonitor
-from monitors.clipboard_monitor import ClipboardMonitor
-from monitors.keyboard_monitor import KeyboardMonitor
-from monitors.process_monitor import ProcessMonitor
-from monitors.window_monitor import WindowMonitor
-from monitors.helpers import check_accessibility_permission, prompt_accessibility_permission
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
@@ -64,18 +55,68 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-clicks", action="store_true", help="disable click monitoring")
     p.add_argument("--no-keys", action="store_true",   help="disable keyboard monitoring")
     p.add_argument("--no-processes", action="store_true", help="disable process monitoring")
-    p.add_argument("--check-permissions", action="store_true",
+    p.add_argument("--check-permissions", "--check-permission", action="store_true",
                    help="print macOS permission status and exit")
     p.add_argument("--prompt-permissions", action="store_true",
                    help="ask macOS to show the Accessibility permission prompt")
+    p.add_argument("--run", action="store_true",
+                   help="run the collector daemon (used by run.sh)")
     return p.parse_args()
 
 
+def _sleep_interval(seconds: float) -> None:
+    """Sleep while pumping the Cocoa run loop (required inside a .app bundle)."""
+    if sys.platform != "darwin":
+        time.sleep(seconds)
+        return
+    try:
+        from Foundation import NSDate, NSDefaultRunLoopMode, NSRunLoop  # type: ignore
+
+        run_loop = NSRunLoop.currentRunLoop()
+        deadline = time.time() + seconds
+        while time.time() < deadline:
+            remaining = max(0.05, deadline - time.time())
+            run_loop.runMode_beforeDate_(
+                NSDefaultRunLoopMode,
+                NSDate.dateWithTimeIntervalSinceNow_(min(0.25, remaining)),
+            )
+    except Exception:
+        time.sleep(seconds)
+
+
 def print_permission_status(prompt: bool = False) -> int:
+    import os
+
+    from monitors.helpers import (
+        check_accessibility_functional,
+        check_accessibility_permission,
+        get_permission_diagnostics,
+        get_session_context,
+        prompt_accessibility_permission,
+    )
+
     accessibility = prompt_accessibility_permission() if prompt else check_accessibility_permission()
+    functional = check_accessibility_functional()
+    session = get_session_context()
+    diag = get_permission_diagnostics()
+
+    if session == "ssh":
+        ok = None
+        verified = False
+        check_source = "ssh_not_verifiable"
+    else:
+        ok = functional or accessibility
+        verified = True
+        check_source = "local"
+
     status = {
         "accessibility": accessibility,
-        "ok": accessibility,
+        "accessibility_trusted": diag.get("accessibility_trusted", accessibility),
+        "accessibility_functional": functional,
+        "ok": ok,
+        "verified": verified if session == "ssh" else bool(ok),
+        "session": session,
+        "check_source": check_source,
         "required_for": [
             "window titles",
             "browser URLs",
@@ -84,15 +125,29 @@ def print_permission_status(prompt: bool = False) -> int:
             "keyboard listener",
         ],
         "settings_path": "System Settings -> Privacy & Security -> Accessibility",
+        "grant_helper": "bash grant-accessibility.sh",
         "suggestion": (
-            "Grant Accessibility access to the terminal app, Python executable, "
-            "or LaunchAgent process that runs the collector. Run this check from "
-            "Terminal/iTerm on the Mac, not from a headless SSH session, if the "
-            "system prompt does not appear."
+            "Add ~/Applications/OpenContext Collector.app in System Settings → "
+            "Privacy & Security → Accessibility. Run: bash grant-accessibility.sh"
         ),
+        **{k: v for k, v in diag.items() if k not in {
+            "accessibility", "accessibility_trusted", "accessibility_functional", "launched_via_ssh",
+        }},
     }
+    if session == "ssh":
+        status["verify_on_mac"] = (
+            f"cd {os.path.dirname(os.path.abspath(__file__))} && "
+            "bash run.sh --check-permissions"
+        )
+        status["suggestion"] = (
+            "Cannot verify Accessibility over SSH. Run verify_on_mac on the Mac. "
+            "If opencontext-mac-collector is enabled in Accessibility, the collector works."
+        )
+
     print(json.dumps(status, ensure_ascii=False, indent=2), flush=True)
-    return 0 if accessibility else 4
+    if session == "ssh":
+        return 0
+    return 0 if ok else 4
 
 
 def _drain(q: Queue) -> list[dict]:
@@ -106,12 +161,29 @@ def _drain(q: Queue) -> list[dict]:
 
 
 def main() -> None:
+    from client import OpenContextClient
+    from config import Config
+    from monitors.click_monitor import ClickMonitor
+    from monitors.clipboard_monitor import ClipboardMonitor
+    from monitors.keyboard_monitor import KeyboardMonitor
+    from monitors.process_monitor import ProcessMonitor
+    from monitors.window_monitor import WindowMonitor
+
     args = parse_args()
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
     if args.check_permissions or args.prompt_permissions:
         sys.exit(print_permission_status(prompt=args.prompt_permissions))
+
+    if getattr(sys, "frozen", False) and not args.run:
+        print(
+            "This binary is the background collector. Run:\n"
+            "  bash grant-accessibility.sh   # setup UI\n"
+            "  bash run.sh --run             # start collector\n",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     config = Config.load(args.config)
     if args.url:
@@ -199,7 +271,7 @@ def main() -> None:
 
     total_pushed = 0
     while True:
-        time.sleep(config.flush_interval)
+        _sleep_interval(config.flush_interval)
         events = _drain(event_queue)
         if not events:
             continue

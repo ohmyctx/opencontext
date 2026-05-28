@@ -62,7 +62,7 @@ class KeyboardMonitor:
         elif self.config.collect_text_input and not has_ax:
             logger.warning(
                 "Accessibility permission not granted — text-input capture disabled.\n"
-                "  Fix: System Settings → Privacy & Security → Accessibility → add OpenContextCollector.app or ~/.opencontext/bin/opencontext-mac-collector"
+                "  Fix: add OpenContext Collector.app in Applications → Accessibility"
             )
 
         if has_ax:
