@@ -1,12 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=1400" />
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1400">
   <title>OpenContext — Concept</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -351,49 +349,49 @@
 <body>
   <div class="canvas" id="canvas">
 
-    <svg class="gather-svg" id="gather" xmlns="http://www.w3.org/2000/svg"></svg>
+    <svg class="gather-svg" id="gather" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 760"><path d="M201.0,131.9 Q450.5,205.9 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.20)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M401.0,113.9 Q550.5,197.8 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.25)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M621.0,137.9 Q660.5,208.6 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.30)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M841.0,109.9 Q770.5,196.0 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.20)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M1061.0,133.9 Q880.5,206.8 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.25)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M1281.0,117.9 Q990.5,199.6 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.30)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M301.0,203.9 Q500.5,238.3 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.20)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M521.0,213.9 Q610.5,242.8 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.25)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M841.0,199.9 Q770.5,236.5 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.30)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M1141.0,199.9 Q920.5,236.5 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.20)" stroke-width="1.5" stroke-dasharray="5 7"></path></svg>
 
     <!-- Stage 1 -->
     <section class="signals-zone" id="signals">
-      <div class="stage-label">Beyond the chat</div>
+      <div class="stage-label"></div>
 
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type shell">shell</div>
         <div class="signal-body">go test ./pkg/auth <span class="bad">✗ exit 1</span></div>
       </div>
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type git">git</div>
         <div class="signal-body">commit · fix oauth callback</div>
       </div>
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type browser">browser</div>
         <div class="signal-body">stripe.com/docs/webhooks</div>
       </div>
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type build">build</div>
         <div class="signal-body">3 errors in <span class="bad">auth/</span></div>
       </div>
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type ide">ide</div>
         <div class="signal-body">edited middleware.go</div>
       </div>
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type shell">shell</div>
         <div class="signal-body">npm run lint <span class="good">✓</span></div>
       </div>
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type claude">claude</div>
         <div class="signal-body">"Continue the auth refactor…"</div>
       </div>
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type codex">codex</div>
         <div class="signal-body">"Fix the failing tests in auth/"</div>
       </div>
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type browser">browser</div>
         <div class="signal-body">github.com/…/pull/42</div>
       </div>
-      <div class="signal" data-signal>
+      <div class="signal" data-signal="">
         <div class="signal-type ide">ide</div>
         <div class="signal-body">focused api/routes.go</div>
       </div>
@@ -406,10 +404,10 @@
       <div class="oc-hub" id="hub">
         <div class="oc-mark">
           <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="22" cy="22" r="14" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-            <circle cx="22" cy="22" r="9" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
-            <circle cx="22" cy="22" r="4" fill="#fff"/>
-            <circle cx="32" cy="12" r="2.5" fill="#a5f3fc"/>
+            <circle cx="22" cy="22" r="14" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"></circle>
+            <circle cx="22" cy="22" r="9" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2"></circle>
+            <circle cx="22" cy="22" r="4" fill="#fff"></circle>
+            <circle cx="32" cy="12" r="2.5" fill="#a5f3fc"></circle>
           </svg>
         </div>
         <span class="oc-name">OpenContext</span>
@@ -424,44 +422,40 @@
     <!-- Stage 3 -->
     <section class="compile-zone">
       <div class="compile-stream"></div>
-      <div class="memory-card">
-        <span class="icon"></span>
-        <span class="filename">memory.md</span>
-        <span class="hint">local · privacy-aware</span>
-      </div>
+      
     </section>
 
     <!-- Stage 4 -->
     <section class="flush-zone">
       <div class="stage-label">Agent memory</div>
-      <p class="flush-hint">memory injected into</p>
+      
       <div class="agent-row">
         <div class="agent-chip">
-          <span class="logo claude"><img src="logos/claude-icon.svg" alt="" /></span>
+          
           <span class="name">Claude Code</span>
         </div>
         <div class="agent-chip">
-          <span class="logo dark"><img src="logos/openai.svg" alt="" style="filter:brightness(0) invert(1)" /></span>
+          
           <span class="name">Codex</span>
         </div>
         <div class="agent-chip">
-          <span class="logo dark"><img src="logos/cursor.svg" alt="" /></span>
+          
           <span class="name">Cursor</span>
         </div>
         <div class="agent-chip">
-          <span class="logo opencode"><img src="logos/opencode-icon.svg" alt="" /></span>
+          
           <span class="name">OpenCode</span>
         </div>
         <div class="agent-chip">
-          <span class="logo"><img src="logos/gemini.svg" alt="" /></span>
+          
           <span class="name">Gemini CLI</span>
         </div>
         <div class="agent-chip">
-          <span class="logo"><img src="logos/hermes.png" alt="" /></span>
+          
           <span class="name">Hermes</span>
         </div>
         <div class="agent-chip">
-          <span class="logo"><img src="logos/openclaw.svg" alt="" /></span>
+          
           <span class="name">OpenClaw</span>
         </div>
       </div>
@@ -506,5 +500,6 @@
       });
     });
   </script>
-</body>
-</html>
+
+
+</body></html>
