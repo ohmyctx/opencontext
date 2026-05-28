@@ -36,6 +36,24 @@ app (Terminal, iTerm2, etc.) or the collector binary.
 Without this permission, UI element names in click events will be empty and
 text-input capture will not work. Window focus and app launch still work without it.
 
+Check permission status from the Mac:
+
+```bash
+bash run.sh --check-permissions
+```
+
+Ask macOS to show the Accessibility prompt:
+
+```bash
+bash run.sh --prompt-permissions
+```
+
+Run the prompt command from Terminal or iTerm on the Mac. A collector started
+from a headless SSH session may not be able to display the macOS permission
+prompt. If the collector runs via LaunchAgent, grant Accessibility access to
+the terminal app used during setup and, if macOS shows it separately, the
+Python executable that runs `collectors/mac/.venv/bin/python`.
+
 ## Usage
 
 ```bash

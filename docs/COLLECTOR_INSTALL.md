@@ -127,6 +127,24 @@ Add the terminal app or the app that will run the collector.
 
 Without this permission, window focus and app launch still work, but click element names and text input capture may be incomplete.
 
+Verify permission status on the Mac:
+
+```bash
+bash run.sh --check-permissions
+```
+
+Prompt macOS to open the Accessibility permission flow:
+
+```bash
+bash run.sh --prompt-permissions
+```
+
+Run the prompt command from Terminal or iTerm on the Mac. Do not rely on a
+headless SSH session to request this permission; macOS may not show the TCC
+prompt for SSH-launched processes. If the collector is later run by launchd,
+the user may also need to grant Accessibility access to the Python executable
+inside `collectors/mac/.venv/bin/python` if macOS lists it separately.
+
 ### Run In Foreground
 
 ```bash

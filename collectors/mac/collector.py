@@ -37,6 +37,7 @@ from monitors.clipboard_monitor import ClipboardMonitor
 from monitors.keyboard_monitor import KeyboardMonitor
 from monitors.process_monitor import ProcessMonitor
 from monitors.window_monitor import WindowMonitor
+from monitors.helpers import check_accessibility_permission, prompt_accessibility_permission
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,7 +64,35 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--no-clicks", action="store_true", help="disable click monitoring")
     p.add_argument("--no-keys", action="store_true",   help="disable keyboard monitoring")
     p.add_argument("--no-processes", action="store_true", help="disable process monitoring")
+    p.add_argument("--check-permissions", action="store_true",
+                   help="print macOS permission status and exit")
+    p.add_argument("--prompt-permissions", action="store_true",
+                   help="ask macOS to show the Accessibility permission prompt")
     return p.parse_args()
+
+
+def print_permission_status(prompt: bool = False) -> int:
+    accessibility = prompt_accessibility_permission() if prompt else check_accessibility_permission()
+    status = {
+        "accessibility": accessibility,
+        "ok": accessibility,
+        "required_for": [
+            "window titles",
+            "browser URLs",
+            "UI click element names",
+            "submitted text input",
+            "keyboard listener",
+        ],
+        "settings_path": "System Settings -> Privacy & Security -> Accessibility",
+        "suggestion": (
+            "Grant Accessibility access to the terminal app, Python executable, "
+            "or LaunchAgent process that runs the collector. Run this check from "
+            "Terminal/iTerm on the Mac, not from a headless SSH session, if the "
+            "system prompt does not appear."
+        ),
+    }
+    print(json.dumps(status, ensure_ascii=False, indent=2), flush=True)
+    return 0 if accessibility else 4
 
 
 def _drain(q: Queue) -> list[dict]:
@@ -80,6 +109,9 @@ def main() -> None:
     args = parse_args()
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    if args.check_permissions or args.prompt_permissions:
+        sys.exit(print_permission_status(prompt=args.prompt_permissions))
 
     config = Config.load(args.config)
     if args.url:

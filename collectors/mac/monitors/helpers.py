@@ -80,6 +80,23 @@ def check_accessibility_permission() -> bool:
             return False
 
 
+def prompt_accessibility_permission() -> bool:
+    """Prompt for Accessibility permission and return current trust state.
+
+    macOS only shows the system prompt from a GUI-capable user session. When the
+    collector is launched from SSH, this usually returns False without a useful
+    prompt; run it from Terminal/iTerm on the Mac when onboarding permissions.
+    """
+    if not _ax_ok:
+        return False
+    try:
+        from ApplicationServices import AXIsProcessTrustedWithOptions  # type: ignore
+        opts = {"AXTrustedCheckOptionPrompt": True}
+        return bool(AXIsProcessTrustedWithOptions(opts))
+    except Exception:
+        return check_accessibility_permission()
+
+
 def get_frontmost_app() -> Optional[dict]:
     """Return info about the currently frontmost application.
 
