@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 // Filter decides which events are allowed to be stored.

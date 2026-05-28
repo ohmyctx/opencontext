@@ -18,12 +18,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/yetanotherai/opencontext/internal/daemon"
-	"github.com/yetanotherai/opencontext/internal/installers"
-	"github.com/yetanotherai/opencontext/internal/registry"
-	"github.com/yetanotherai/opencontext/internal/service"
-	"github.com/yetanotherai/opencontext/pkg/client"
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/internal/daemon"
+	"github.com/ohmyctx/opencontext/internal/installers"
+	"github.com/ohmyctx/opencontext/internal/registry"
+	"github.com/ohmyctx/opencontext/internal/service"
+	"github.com/ohmyctx/opencontext/pkg/client"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 var (
@@ -1086,7 +1086,7 @@ func findBrowserFirefoxSource() (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("could not find collectors/browser/firefox; pass --source or clone https://github.com/yetanotherai/opencontext")
+	return "", fmt.Errorf("could not find collectors/browser/firefox; pass --source or clone https://github.com/ohmyctx/opencontext")
 }
 
 func validateFirefoxExtensionDir(path string) error {
@@ -1242,7 +1242,7 @@ func findBrowserChromeSource() (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("could not find collectors/browser/chrome; pass --source or clone https://github.com/yetanotherai/opencontext")
+	return "", fmt.Errorf("could not find collectors/browser/chrome; pass --source or clone https://github.com/ohmyctx/opencontext")
 }
 
 func validateChromeExtensionDir(path string) error {
@@ -1392,7 +1392,7 @@ func findBrowserEdgeSource() (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("could not find collectors/browser/edge; pass --source or clone https://github.com/yetanotherai/opencontext")
+	return "", fmt.Errorf("could not find collectors/browser/edge; pass --source or clone https://github.com/ohmyctx/opencontext")
 }
 
 func copyDir(src, dst string) error {

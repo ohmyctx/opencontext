@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 type DispatchFunc func(http.ResponseWriter, *event.ActivityEvent)

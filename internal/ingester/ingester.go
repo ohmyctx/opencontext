@@ -16,9 +16,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/yetanotherai/opencontext/internal/policy"
-	"github.com/yetanotherai/opencontext/internal/store"
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/internal/policy"
+	"github.com/ohmyctx/opencontext/internal/store"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 const (

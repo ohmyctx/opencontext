@@ -17,16 +17,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/yetanotherai/opencontext/internal/adapters/aihooks"
-	"github.com/yetanotherai/opencontext/internal/compiler"
-	"github.com/yetanotherai/opencontext/internal/ingester"
-	"github.com/yetanotherai/opencontext/internal/policy"
-	"github.com/yetanotherai/opencontext/internal/registry"
-	"github.com/yetanotherai/opencontext/internal/service"
-	"github.com/yetanotherai/opencontext/internal/sessionizer"
-	"github.com/yetanotherai/opencontext/internal/store"
-	"github.com/yetanotherai/opencontext/internal/subscription"
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/internal/adapters/aihooks"
+	"github.com/ohmyctx/opencontext/internal/compiler"
+	"github.com/ohmyctx/opencontext/internal/ingester"
+	"github.com/ohmyctx/opencontext/internal/policy"
+	"github.com/ohmyctx/opencontext/internal/registry"
+	"github.com/ohmyctx/opencontext/internal/service"
+	"github.com/ohmyctx/opencontext/internal/sessionizer"
+	"github.com/ohmyctx/opencontext/internal/store"
+	"github.com/ohmyctx/opencontext/internal/subscription"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 // startPruner runs a daily job that deletes events older than retentionDays.

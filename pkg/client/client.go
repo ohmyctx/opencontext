@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 const defaultTimeout = 3 * time.Second

@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yetanotherai/opencontext/internal/memory"
-	"github.com/yetanotherai/opencontext/internal/sessionizer"
-	"github.com/yetanotherai/opencontext/internal/store"
-	"github.com/yetanotherai/opencontext/internal/subscription"
-	"github.com/yetanotherai/opencontext/internal/summarizer"
-	"github.com/yetanotherai/opencontext/pkg/event"
-	"github.com/yetanotherai/opencontext/pkg/session"
+	"github.com/ohmyctx/opencontext/internal/memory"
+	"github.com/ohmyctx/opencontext/internal/sessionizer"
+	"github.com/ohmyctx/opencontext/internal/store"
+	"github.com/ohmyctx/opencontext/internal/subscription"
+	"github.com/ohmyctx/opencontext/internal/summarizer"
+	"github.com/ohmyctx/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/pkg/session"
 )
 
 // Compiler runs the memory compilation pipeline for a set of subscriptions.

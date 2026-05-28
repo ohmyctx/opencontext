@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/yetanotherai/opencontext/internal/registry"
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/internal/registry"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 func TestCollectorsHandlerReturnsVersionedManifests(t *testing.T) {

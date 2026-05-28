@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yetanotherai/opencontext/pkg/session"
+	"github.com/ohmyctx/opencontext/pkg/session"
 )
 
 // Backend writes compiled memory to a storage destination.

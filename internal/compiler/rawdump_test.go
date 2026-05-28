@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yetanotherai/opencontext/internal/subscription"
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/internal/subscription"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 func TestFormatEventLineUsesGenericFieldsForUnknownCollector(t *testing.T) {

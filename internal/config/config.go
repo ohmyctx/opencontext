@@ -2,7 +2,7 @@
 // It also adds HTTP query handler logic that lives at the daemon level.
 package config
 
-import "github.com/yetanotherai/opencontext/internal/subscription"
+import "github.com/ohmyctx/opencontext/internal/subscription"
 
 // Config is the full daemon configuration.
 type Config = subscription.Config

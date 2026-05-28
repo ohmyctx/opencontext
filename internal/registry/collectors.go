@@ -3,7 +3,7 @@ package registry
 import (
 	"sort"
 
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 type CollectorKind string

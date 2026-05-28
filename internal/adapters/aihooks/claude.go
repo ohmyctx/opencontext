@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 // claudeHookInput is the JSON body Claude Code sends for hook events.

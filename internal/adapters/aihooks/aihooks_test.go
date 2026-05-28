@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yetanotherai/opencontext/internal/adapters/aihooks"
-	"github.com/yetanotherai/opencontext/internal/ingester"
-	"github.com/yetanotherai/opencontext/internal/policy"
-	"github.com/yetanotherai/opencontext/internal/store"
-	"github.com/yetanotherai/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/internal/adapters/aihooks"
+	"github.com/ohmyctx/opencontext/internal/ingester"
+	"github.com/ohmyctx/opencontext/internal/policy"
+	"github.com/ohmyctx/opencontext/internal/store"
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 func TestHookAdapterToIngesterE2E(t *testing.T) {

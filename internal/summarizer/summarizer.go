@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yetanotherai/opencontext/pkg/event"
-	"github.com/yetanotherai/opencontext/pkg/session"
+	"github.com/ohmyctx/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/pkg/session"
 )
 
 // Summarizer converts a batch of sessions into Markdown text.

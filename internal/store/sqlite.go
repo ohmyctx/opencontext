@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/yetanotherai/opencontext/pkg/event"
-	"github.com/yetanotherai/opencontext/pkg/session"
+	"github.com/ohmyctx/opencontext/pkg/event"
+	"github.com/ohmyctx/opencontext/pkg/session"
 	_ "modernc.org/sqlite" // pure-Go SQLite driver, no CGO
 )
 
