@@ -1,7 +1,25 @@
 #!/usr/bin/env bash
 # install.sh — set up the macOS OpenContext collector
-# Usage: bash install.sh
+# Usage: bash install.sh [--no-prompt-permissions]
 set -euo pipefail
+
+PROMPT_PERMISSIONS=1
+for arg in "$@"; do
+  case "$arg" in
+    --no-prompt-permissions)
+      PROMPT_PERMISSIONS=0
+      ;;
+    -h|--help)
+      echo "Usage: bash install.sh [--no-prompt-permissions]"
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown argument: $arg" >&2
+      echo "Usage: bash install.sh [--no-prompt-permissions]" >&2
+      exit 2
+      ;;
+  esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV="$SCRIPT_DIR/.venv"
@@ -36,11 +54,34 @@ echo "Installing dependencies …"
 "$VENV/bin/pip" install --quiet -r "$SCRIPT_DIR/requirements.txt"
 
 echo ""
+echo "Checking macOS Accessibility permission …"
+if "$VENV/bin/python" "$SCRIPT_DIR/collector.py" --check-permissions >/tmp/opencontext-mac-permission.json 2>/dev/null; then
+  ACCESSIBILITY_OK=1
+else
+  ACCESSIBILITY_OK=0
+fi
+
+if [[ "$ACCESSIBILITY_OK" -eq 0 && "$PROMPT_PERMISSIONS" -eq 1 ]]; then
+  echo "Opening the Accessibility permission prompt/settings page."
+  "$VENV/bin/python" "$SCRIPT_DIR/collector.py" --prompt-permissions >/tmp/opencontext-mac-permission.json 2>/dev/null || true
+  open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" >/dev/null 2>&1 || true
+fi
+
+echo ""
 echo "✓ Installation complete."
 echo ""
 echo "Next steps:"
-echo "  1. Grant Accessibility permission:"
-echo "     System Settings → Privacy & Security → Accessibility → add Terminal (or your app)"
+if [[ "$ACCESSIBILITY_OK" -eq 0 ]]; then
+  echo "  1. Grant Accessibility permission if macOS did not already show the prompt:"
+  echo "     System Settings → Privacy & Security → Accessibility"
+  echo "     Add and enable the terminal app you use, plus this Python executable if shown:"
+  echo "     $VENV/bin/python"
+  echo ""
+  echo "     Verify after granting:"
+  echo "     bash $SCRIPT_DIR/run.sh --check-permissions"
+else
+  echo "  1. Accessibility permission is already granted."
+fi
 echo ""
 echo "  2. Start the collector:"
 echo "     bash $SCRIPT_DIR/run.sh"

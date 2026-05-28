@@ -1,10 +1,10 @@
 # start_collector.ps1 — launch Windows UI collector as a hidden background process.
-# Called by 'make start-collector' from WSL2.
 param(
     [string]$Python     = "C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe",
     [string]$CollectorDir = "C:\oc-collector",
-    [string]$EventsFile = "C:\oc-collector\events.jsonl",
-    [string]$LogFile    = "C:\oc-collector\collector.log"
+    [string]$Url        = "http://localhost:6060",
+    [string]$LogFile    = "C:\oc-collector\collector.log",
+    [string]$OutFile    = "C:\oc-collector\collector.out.log"
 )
 
 # Stop any existing python collector
@@ -17,11 +17,11 @@ if ($existing) {
 
 $proc = Start-Process `
     -FilePath $Python `
-    -ArgumentList "-u", "$CollectorDir\collector.py", "--dry-run" `
+    -ArgumentList "-u", "$CollectorDir\collector.py", "--url", $Url `
     -WorkingDirectory $CollectorDir `
-    -RedirectStandardOutput $EventsFile `
+    -RedirectStandardOutput $OutFile `
     -RedirectStandardError  $LogFile `
     -PassThru `
     -WindowStyle Hidden
 
-Write-Host "[collector] started  PID: $($proc.Id)"
+Write-Host "[collector] started  PID: $($proc.Id)  URL: $Url"

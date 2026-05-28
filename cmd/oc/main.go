@@ -511,6 +511,7 @@ func buildEventsCmd() *cobra.Command {
 		since   string
 		limit   int
 		query   string
+		maxSens int
 	)
 
 	cmd := &cobra.Command{
@@ -541,6 +542,9 @@ When stdout is not a TTY, output defaults to JSON for agent parsing. Use
 			if source != "" {
 				q.Source = event.Source(source)
 			}
+			if maxSens > 0 {
+				q.MaxSensitivity = event.SensitivityLevel(maxSens)
+			}
 
 			resp, err := c.QueryEvents(ctx, q)
 			if err != nil {
@@ -556,12 +560,16 @@ When stdout is not a TTY, output defaults to JSON for agent parsing. Use
 				return nil
 			}
 
-			fmt.Printf("%-24s %-8s %-16s %s\n", "TIME", "SOURCE", "TYPE", "SUMMARY")
-			fmt.Printf("%-24s %-8s %-16s %s\n", "────────────────────────", "────────", "────────────────", "───────────────────────────────────────")
+			fmt.Printf("%-24s %-8s %-10s %-16s %s\n", "TIME", "SOURCE", "PLATFORM", "TYPE", "SUMMARY")
+			fmt.Printf("%-24s %-8s %-10s %-16s %s\n", "────────────────────────", "────────", "──────────", "────────────────", "───────────────────────────────────────")
 			for _, e := range resp.Events {
 				ts := time.UnixMilli(e.Ts).Format("2006-01-02 15:04:05")
 				summary := buildEventSummary(e)
-				fmt.Printf("%-24s %-8s %-16s %s\n", ts, e.Source, e.Type, summary)
+				platform := e.Labels["platform"]
+				if platform == "" {
+					platform = "-"
+				}
+				fmt.Printf("%-24s %-8s %-10s %-16s %s\n", ts, e.Source, platform, e.Type, summary)
 			}
 
 			if resp.Truncated {
@@ -578,6 +586,7 @@ When stdout is not a TTY, output defaults to JSON for agent parsing. Use
 	cmd.Flags().StringVar(&since, "since", "24h", "time window (e.g. 2h, 30m, 7d)")
 	cmd.Flags().IntVar(&limit, "limit", 50, "maximum events to return")
 	cmd.Flags().StringVar(&query, "query", "", "full-text search query")
+	cmd.Flags().IntVar(&maxSens, "max-sensitivity", 0, "maximum sensitivity to return (1=L1, 2=L2, 3=L3; default: all stored events)")
 
 	// oc events clear
 	clearCmd := &cobra.Command{

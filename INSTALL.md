@@ -31,6 +31,8 @@ Recommended default: install only the collectors for tools the user actually use
 
 The shell and agent hook collectors are bundled in `oc`. The Chrome collector is a browser extension that `oc` can prepare locally, but Chrome requires the user to load the unpacked extension from `chrome://extensions`. The macOS and Windows activity collectors are external collectors stored in this repo; install them only when the user explicitly chooses OS activity capture. Collectors are language-agnostic as long as they report OpenContext events.
 
+The macOS and Windows activity collectors push directly to `oc daemon` in a normal install. Do not ask users to set up JSONL files or bridge scripts; those are local development helpers for unusual WSL2/network setups.
+
 ## Ask The User First
 
 Ask these questions before changing files:
@@ -78,6 +80,8 @@ Rules for agents:
 
 - In non-TTY execution, `oc` defaults to JSON output. Still pass `--format json` when the surrounding workflow depends on machine-readable output, because it documents intent.
 - Use `--format table` only when the user explicitly wants human-readable tables.
+- OS activity events use `source: "os"` and include `labels.platform` (`macos` or `windows`) plus `labels.collector`, `labels.collector_version`, and `labels.host`.
+- Clipboard events are L3. Query with `oc events --source os --max-sensitivity 3 --format json`, and only set subscription `max_sensitivity: 3` after explicit user consent.
 - Use long flags only, for example `--subscription`, `--source`, `--since`, `--daemon`.
 - Before running a side-effect command, inspect it with `oc schema <command...> --format json`.
 - For commands with `--dry-run`, run the dry run first and show the user what will change.

@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import logging
+import platform
+import socket
 import time
 from typing import Optional
 
 import requests
 
 logger = logging.getLogger(__name__)
+
+COLLECTOR_NAME = "opencontext-macos"
+COLLECTOR_VERSION = "0.1.0"
+PLATFORM = "macos"
+HOSTNAME = socket.gethostname()
 
 
 def make_event(
@@ -21,7 +28,15 @@ def make_event(
 ) -> dict:
     """Build a well-formed ActivityEvent dict ready to POST to the OpenContext daemon."""
     # Strip empty string values — the daemon rejects them
-    clean_labels = {k: v for k, v in labels.items() if v and v != ""}
+    base_labels = {
+        "platform": PLATFORM,
+        "os": platform.platform(),
+        "host": HOSTNAME,
+        "collector": COLLECTOR_NAME,
+        "collector_version": COLLECTOR_VERSION,
+    }
+    base_labels.update(labels)
+    clean_labels = {k: v for k, v in base_labels.items() if v and v != ""}
     clean_payload = {k: v for k, v in payload.items() if v != "" and v is not None}
     return {
         "ts": ts if ts is not None else int(time.time() * 1000),

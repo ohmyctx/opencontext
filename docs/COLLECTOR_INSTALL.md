@@ -35,6 +35,8 @@ Standalone activity collectors live in this repository:
 
 They are intentionally installed only when the user asks for OS-level activity capture because they require extra dependencies and platform permissions. The current repo implementations use Python, but OpenContext's collector contract is language-agnostic.
 
+Production collectors should push directly to the daemon with `POST /api/v1/events` or `/api/v1/events/batch`. Do not use JSONL files or bridge scripts for a normal user install. The bridge scripts in the repo are local development helpers for unusual network layouts such as WSL2 where the OS collector cannot reach the WSL daemon directly.
+
 Browser extension collectors are installed through the browser's extension UI. For Chrome, see `collectors/browser/README.md`.
 
 ## Build Your Own Collector
@@ -71,6 +73,22 @@ Recommended fields:
 - `sensitivity`: `1`, `2`, or `3`
 - `labels`: small indexed strings for filtering, such as `project`, `app`, `domain`
 - `payload`: source-specific JSON object
+
+For cross-platform collectors, include platform identity in labels so agents can distinguish events with the same source:
+
+```json
+{
+  "source": "os",
+  "type": "window_focus",
+  "sensitivity": 1,
+  "labels": {
+    "platform": "macos",
+    "collector": "opencontext-macos",
+    "collector_version": "0.1.0",
+    "host": "alice-macbook"
+  }
+}
+```
 
 Schemas are optional metadata. They document labels and payloads for humans, agents, and display code, but daemon ingestion should not depend on a source-specific schema.
 
@@ -114,6 +132,7 @@ bash install.sh
 ```
 
 This creates a local `.venv` and installs Python dependencies.
+It also attempts to trigger the macOS Accessibility permission prompt and opens the matching System Settings page.
 
 ### Permissions
 
@@ -123,9 +142,9 @@ Ask the user to grant Accessibility permission:
 System Settings -> Privacy & Security -> Accessibility
 ```
 
-Add the terminal app or the app that will run the collector.
+Add the terminal app or the app that will run the collector. If macOS lists the Python executable separately, add and enable `collectors/mac/.venv/bin/python` too.
 
-Without this permission, window focus and app launch still work, but click element names and text input capture may be incomplete.
+Without this permission, app launch and clipboard monitoring can still work, but window titles, browser URLs, click element names, and text input capture may be incomplete.
 
 Verify permission status on the Mac:
 
@@ -144,6 +163,8 @@ headless SSH session to request this permission; macOS may not show the TCC
 prompt for SSH-launched processes. If the collector is later run by launchd,
 the user may also need to grant Accessibility access to the Python executable
 inside `collectors/mac/.venv/bin/python` if macOS lists it separately.
+
+Clipboard events are `sensitivity: 3`. If they are visible with `oc events --source os --max-sensitivity 3` but absent from generated memory, update the selected subscription's `filter.max_sensitivity` to `3` only after the user explicitly agrees to L3 capture.
 
 ### Run In Foreground
 
@@ -187,7 +208,7 @@ Create `~/Library/LaunchAgents/ai.opencontext.collector.mac.plist`:
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>__HOME__/.opencontext/logs/mac-collector.log</string>
+  <string>__HOME__/.opencontext/logs/mac-collector.out.log</string>
   <key>StandardErrorPath</key>
   <string>__HOME__/.opencontext/logs/mac-collector.err.log</string>
 </dict>
@@ -304,7 +325,7 @@ oc events --since 10m
 For OS collectors:
 
 ```bash
-oc events --source os --since 10m
+oc events --source os --since 10m --max-sensitivity 3
 ```
 
 If no events appear:

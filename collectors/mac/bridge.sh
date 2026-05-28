@@ -21,12 +21,11 @@ LOG_TAG="[mac-bridge]"
 log() { echo "$LOG_TAG $(date '+%H:%M:%S') $*" >&2; }
 
 flush_batch() {
-  local -n _lines=$1
-  [[ ${#_lines[@]} -eq 0 ]] && return
-  local n=${#_lines[@]}
+  [[ $# -eq 0 ]] && return
+  local n=$#
   local payload
   if command -v jq &>/dev/null; then
-    payload=$(printf '%s\n' "${_lines[@]}" | jq -sc '{events: .}' 2>/dev/null)
+    payload=$(printf '%s\n' "$@" | jq -sc '{events: .}' 2>/dev/null)
     curl -sf -X POST "$DAEMON_URL/api/v1/events/batch" \
       -H "Content-Type: application/json" \
       -d "$payload" &>/dev/null \
@@ -34,14 +33,13 @@ flush_batch() {
       || log "flush failed (OpenContext daemon down?)"
   else
     local ok=0
-    for ln in "${_lines[@]}"; do
+    for ln in "$@"; do
       curl -sf -X POST "$DAEMON_URL/api/v1/events" \
         -H "Content-Type: application/json" \
         -d "$ln" &>/dev/null && (( ok++ )) || true
     done
     log "flushed $ok/$n events (no jq, one-by-one)"
   fi
-  _lines=()
 }
 
 # Wait for events file
@@ -76,9 +74,11 @@ while true; do
     buffer+=("$line")
     pos=$(( pos + 1 ))
     if [[ ${#buffer[@]} -ge $BATCH_SIZE ]]; then
-      flush_batch buffer
+      flush_batch "${buffer[@]}"
+      buffer=()
     fi
   done <<< "$new_lines"
 
-  flush_batch buffer
+  flush_batch "${buffer[@]}"
+  buffer=()
 done

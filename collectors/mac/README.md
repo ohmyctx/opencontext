@@ -27,14 +27,16 @@ bash install.sh
 ```
 
 This creates a `.venv` and installs all Python dependencies (`pyobjc`, `pynput`, etc.).
+It also attempts to show the macOS Accessibility prompt and opens the matching
+System Settings page.
 
 ## Permissions
 
 Go to **System Settings → Privacy & Security → Accessibility** and add your terminal
-app (Terminal, iTerm2, etc.) or the collector binary.
+app (Terminal, iTerm2, Warp, etc.) or the Python executable shown by `install.sh`.
 
-Without this permission, UI element names in click events will be empty and
-text-input capture will not work. Window focus and app launch still work without it.
+Without this permission, app launch and clipboard monitoring can still work, but
+window titles, browser URLs, UI element names, and text-input capture may be incomplete.
 
 Check permission status from the Mac:
 
@@ -53,6 +55,10 @@ from a headless SSH session may not be able to display the macOS permission
 prompt. If the collector runs via LaunchAgent, grant Accessibility access to
 the terminal app used during setup and, if macOS shows it separately, the
 Python executable that runs `collectors/mac/.venv/bin/python`.
+
+Clipboard events are captured through `NSPasteboard` and normally do not require
+Accessibility permission, but they are L3 events. They only appear in generated
+memory when the selected subscription allows `max_sensitivity: 3`.
 
 ## Usage
 
@@ -101,3 +107,6 @@ collector.py  ←  event Queue  ←  WindowMonitor   (NSWorkspace + AXUIElement)
       ↓
   ContextClient  →  HTTP POST  →  oc daemon (localhost:6060)
 ```
+
+Every event includes platform labels such as `platform=macos`,
+`collector=opencontext-macos`, `collector_version`, and `host`.

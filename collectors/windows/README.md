@@ -10,9 +10,10 @@
 | 鼠标点击 | `os` | `ui_click` | L2 | 控件名称、控件类型、坐标、窗口标题 |
 | 文本输入提交 | `os` | `text_input` | L2 | 输入框内容（Enter/Tab 触发），跳过密码框 |
 | 进程启动 | `os` | `app_launch` | L1 | 程序名、可执行路径 |
+| 剪贴板复制 | `os` | `clipboard_copy` | **L3** | 文本、文件列表或图片元数据 |
 | 按键（可选） | `os` | `key_press` | **L3** | 单个按键名，需显式开启，永远跳过密码框 |
 
-**默认灵敏度上限 L2**，不采集剪贴板、密码等敏感内容。
+剪贴板是 L3。只有在用户明确同意 L3 后，才把订阅的 `max_sensitivity` 调到 `3`。
 
 ---
 
@@ -87,8 +88,8 @@ collect_text_input: true
 # 捕获每个按键 —— L3，需要显式开启
 collect_raw_keys: false
 
-# 捕获剪贴板 —— L3，需要显式开启（暂未实现，预留配置）
-collect_clipboard: false
+# 捕获剪贴板 —— L3
+collect_clipboard: true
 
 # 完全忽略的 App（exe 名称）
 ignore_apps:
@@ -113,6 +114,10 @@ Python 是本 collector 的最优选择：
 - **uiautomation** 封装了 Windows UIAutomation COM 接口，可读取任意控件的名称、类型、值
 - **pynput** 提供全局鼠标/键盘钩子，无需管理员权限
 - **psutil** 跨平台进程监控
+
+正常用户安装时 collector 直接通过 HTTP 推送到 `oc daemon`，不需要 JSONL 文件或 bridge。
+每个事件都会带上 `platform=windows`、`collector=opencontext-windows`、
+`collector_version` 和 `host` 等 label，agent 可以用这些字段区分 Windows 与 macOS。
 
 ### 架构
 
