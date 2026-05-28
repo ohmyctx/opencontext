@@ -44,7 +44,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/concept.png" alt="OpenContext 架构图" width="90%"/>
+  <img src="docs/images/concept.png" alt="OpenContext 架构图" width="100%"/>
 </p>
 
 ```text

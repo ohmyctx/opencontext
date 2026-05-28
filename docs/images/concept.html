@@ -1,6 +1,6 @@
 <html lang="en"><head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=1400">
+  <meta name="viewport" content="width=920">
   <title>OpenContext — Concept</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
@@ -9,8 +9,8 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 1400px;
-      height: 760px;
+      width: 920px;
+      height: 780px;
       overflow: hidden;
       background: #080c18;
       font-family: Inter, system-ui, sans-serif;
@@ -20,12 +20,12 @@
 
     .canvas {
       position: relative;
-      width: 1400px;
-      height: 760px;
-      padding: 40px 64px 32px;
+      width: 920px;
+      height: 780px;
+      padding: 32px 36px 36px;
       background:
-        radial-gradient(ellipse 900px 420px at 50% 38%, rgba(99,102,241,0.11), transparent 70%),
-        radial-gradient(ellipse 500px 300px at 50% 72%, rgba(34,211,238,0.06), transparent 65%),
+        radial-gradient(ellipse 640px 360px at 50% 36%, rgba(99,102,241,0.11), transparent 70%),
+        radial-gradient(ellipse 420px 280px at 50% 74%, rgba(34,211,238,0.06), transparent 65%),
         #080c18;
     }
 
@@ -36,47 +36,46 @@
       background-image:
         linear-gradient(rgba(148,163,184,0.035) 1px, transparent 1px),
         linear-gradient(90deg, rgba(148,163,184,0.035) 1px, transparent 1px);
-      background-size: 32px 32px;
-      mask-image: radial-gradient(ellipse 90% 80% at 50% 45%, black 20%, transparent 100%);
+      background-size: 28px 28px;
+      mask-image: radial-gradient(ellipse 90% 80% at 50% 44%, black 20%, transparent 100%);
       pointer-events: none;
     }
 
     .stage-label {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
-      letter-spacing: 0.22em;
+      letter-spacing: 0.2em;
       text-transform: uppercase;
       color: #475569;
       text-align: center;
     }
 
-    /* ── Stage 1: scattered signals ── */
     .signals-zone {
       position: relative;
-      height: 200px;
-      margin-bottom: 8px;
+      height: 188px;
+      margin-bottom: 36px;
     }
 
     .signals-zone .stage-label {
-      margin-bottom: 20px;
+      display: none;
     }
 
     .signal {
       position: absolute;
-      width: 178px;
-      padding: 10px 12px;
-      border-radius: 10px;
+      width: 152px;
+      padding: 11px 13px;
+      border-radius: 11px;
       background: rgba(15, 23, 42, 0.92);
-      border: 1px solid rgba(148, 163, 184, 0.12);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(148, 163, 184, 0.13);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32);
     }
 
     .signal-type {
-      font-size: 9px;
+      font-size: 10px;
       font-weight: 600;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.13em;
       text-transform: uppercase;
-      margin-bottom: 5px;
+      margin-bottom: 6px;
     }
 
     .signal-type.shell { color: #4ade80; }
@@ -89,10 +88,10 @@
 
     .signal-body {
       font-family: "JetBrains Mono", ui-monospace, monospace;
-      font-size: 11px;
-      font-weight: 400;
-      color: #cbd5e1;
-      line-height: 1.45;
+      font-size: 13px;
+      font-weight: 500;
+      color: #e2e8f0;
+      line-height: 1.4;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -101,17 +100,17 @@
     .signal-body .bad { color: #f87171; }
     .signal-body .good { color: #4ade80; }
 
-    /* positions — organic scatter */
-    .signal:nth-child(2)  { left: 48px;  top: 36px; }
-    .signal:nth-child(3)  { left: 248px; top: 18px; }
-    .signal:nth-child(4)  { left: 468px; top: 42px; }
-    .signal:nth-child(5)  { left: 688px; top: 14px; }
-    .signal:nth-child(6)  { left: 908px; top: 38px; }
-    .signal:nth-child(7)  { left: 1128px;top: 22px; }
-    .signal:nth-child(8)  { left: 148px; top: 108px; }
-    .signal:nth-child(9)  { left: 368px; top: 118px; }
-    .signal:nth-child(10) { left: 688px; top: 104px; }
-    .signal:nth-child(11) { left: 988px; top: 104px; }
+    /* scattered layout */
+    .signal:nth-child(2)  { left: 4px;   top: 22px; }
+    .signal:nth-child(3)  { left: 138px; top: 6px; }
+    .signal:nth-child(4)  { left: 272px; top: 28px; }
+    .signal:nth-child(5)  { left: 406px; top: 4px; }
+    .signal:nth-child(6)  { left: 540px; top: 24px; }
+    .signal:nth-child(7)  { left: 674px; top: 10px; }
+    .signal:nth-child(8)  { left: 52px;  top: 110px; }
+    .signal:nth-child(9)  { left: 210px; top: 116px; }
+    .signal:nth-child(10) { left: 430px; top: 102px; }
+    .signal:nth-child(11) { left: 620px; top: 108px; }
 
     .gather-svg {
       position: absolute;
@@ -123,20 +122,19 @@
       overflow: visible;
     }
 
-    /* ── Stage 2: OpenContext collector ── */
     .collector-zone {
       position: relative;
       z-index: 2;
       display: flex;
       flex-direction: column;
       align-items: center;
-      margin-top: 28px;
+      margin-top: 52px;
     }
 
     .collector-ring {
       position: absolute;
-      width: 340px;
-      height: 340px;
+      width: 320px;
+      height: 320px;
       border-radius: 50%;
       border: 1px solid rgba(99,102,241,0.12);
       top: 50%;
@@ -146,8 +144,8 @@
     }
 
     .collector-ring:nth-child(2) {
-      width: 420px;
-      height: 420px;
+      width: 390px;
+      height: 390px;
       border-color: rgba(99,102,241,0.07);
     }
 
@@ -155,7 +153,7 @@
       display: flex;
       align-items: center;
       gap: 14px;
-      padding: 18px 32px;
+      padding: 20px 34px;
       border-radius: 18px;
       background: linear-gradient(135deg, rgba(99,102,241,0.95), rgba(8,145,178,0.9));
       border: 1px solid rgba(255,255,255,0.14);
@@ -163,8 +161,8 @@
     }
 
     .oc-mark {
-      width: 44px;
-      height: 44px;
+      width: 46px;
+      height: 46px;
       border-radius: 12px;
       background: rgba(255,255,255,0.12);
       display: flex;
@@ -176,7 +174,7 @@
     .oc-mark svg { width: 30px; height: 30px; }
 
     .oc-name {
-      font-size: 26px;
+      font-size: 28px;
       font-weight: 700;
       letter-spacing: -0.3px;
       color: #fff;
@@ -189,10 +187,10 @@
     }
 
     .oc-step {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 500;
       color: rgba(255,255,255,0.7);
-      padding: 5px 14px;
+      padding: 6px 15px;
       border-radius: 999px;
       background: rgba(0,0,0,0.18);
       border: 1px solid rgba(255,255,255,0.08);
@@ -204,74 +202,32 @@
       border-color: rgba(255,255,255,0.2);
     }
 
-    /* ── Stage 3: compile output ── */
     .compile-zone {
       position: relative;
       z-index: 2;
       display: flex;
       flex-direction: column;
       align-items: center;
-      margin-top: 28px;
+      margin-top: 22px;
     }
 
     .compile-stream {
       width: 2px;
-      height: 28px;
+      height: 24px;
       background: linear-gradient(180deg, rgba(99,102,241,0.5), rgba(34,211,238,0.6));
       border-radius: 1px;
-      margin-bottom: 12px;
     }
 
-    .memory-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 22px;
-      border-radius: 12px;
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid rgba(129, 140, 248, 0.35);
-      box-shadow: 0 0 24px rgba(99,102,241,0.15);
-    }
-
-    .memory-card .icon {
-      width: 14px;
-      height: 16px;
-      border-left: 2px solid #818cf8;
-      border-bottom: 2px solid #818cf8;
-      opacity: 0.7;
-      flex-shrink: 0;
-    }
-
-    .memory-card .filename {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 15px;
-      font-weight: 500;
-      color: #c7d2fe;
-    }
-
-    .memory-card .hint {
-      font-size: 11px;
-      color: #64748b;
-      margin-left: 8px;
-    }
-
-    /* ── Stage 4: agent memory targets ── */
     .flush-zone {
       position: relative;
       z-index: 2;
-      margin-top: 24px;
+      margin-top: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
     }
 
     .flush-zone .stage-label {
-      margin-bottom: 10px;
-    }
-
-    .flush-hint {
-      font-size: 12px;
-      color: #64748b;
       margin-bottom: 14px;
     }
 
@@ -279,52 +235,22 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
-      max-width: 900px;
+      max-width: 848px;
     }
 
     .agent-chip {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 14px 7px 10px;
+      padding: 8px 16px;
       border-radius: 10px;
-      background: rgba(30, 41, 59, 0.75);
-      border: 1px solid rgba(148, 163, 184, 0.12);
-    }
-
-    .agent-chip .logo {
-      width: 22px;
-      height: 22px;
-      border-radius: 6px;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      background: #1e293b;
-    }
-
-    .agent-chip .logo.dark { background: #0a0a0a; }
-    .agent-chip .logo.claude { background: #CC785C; }
-    .agent-chip .logo.opencode { background: #131010; }
-
-    .agent-chip .logo img {
-      width: 16px;
-      height: 16px;
-      object-fit: contain;
-    }
-
-    .agent-chip .logo.opencode img {
-      width: 22px;
-      height: 22px;
+      background: rgba(30, 41, 59, 0.78);
+      border: 1px solid rgba(148, 163, 184, 0.13);
     }
 
     .agent-chip .name {
-      font-size: 11px;
-      font-weight: 500;
-      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e2e8f0;
       white-space: nowrap;
     }
 
@@ -349,9 +275,8 @@
 <body>
   <div class="canvas" id="canvas">
 
-    <svg class="gather-svg" id="gather" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 760"><path d="M201.0,131.9 Q450.5,205.9 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.20)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M401.0,113.9 Q550.5,197.8 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.25)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M621.0,137.9 Q660.5,208.6 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.30)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M841.0,109.9 Q770.5,196.0 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.20)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M1061.0,133.9 Q880.5,206.8 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.25)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M1281.0,117.9 Q990.5,199.6 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.30)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M301.0,203.9 Q500.5,238.3 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.20)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M521.0,213.9 Q610.5,242.8 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.25)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M841.0,199.9 Q770.5,236.5 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.30)" stroke-width="1.5" stroke-dasharray="5 7"></path><path d="M1141.0,199.9 Q920.5,236.5 700.0,266.0" fill="none" stroke="rgba(129,140,248,0.20)" stroke-width="1.5" stroke-dasharray="5 7"></path></svg>
+    <svg class="gather-svg" id="gather" xmlns="http://www.w3.org/2000/svg"></svg>
 
-    <!-- Stage 1 -->
     <section class="signals-zone" id="signals">
       <div class="stage-label"></div>
 
@@ -397,7 +322,6 @@
       </div>
     </section>
 
-    <!-- Stage 2 -->
     <section class="collector-zone" id="collector">
       <div class="collector-ring"></div>
       <div class="collector-ring"></div>
@@ -419,45 +343,20 @@
       </div>
     </section>
 
-    <!-- Stage 3 -->
     <section class="compile-zone">
       <div class="compile-stream"></div>
-      
     </section>
 
-    <!-- Stage 4 -->
     <section class="flush-zone">
       <div class="stage-label">Agent memory</div>
-      
       <div class="agent-row">
-        <div class="agent-chip">
-          
-          <span class="name">Claude Code</span>
-        </div>
-        <div class="agent-chip">
-          
-          <span class="name">Codex</span>
-        </div>
-        <div class="agent-chip">
-          
-          <span class="name">Cursor</span>
-        </div>
-        <div class="agent-chip">
-          
-          <span class="name">OpenCode</span>
-        </div>
-        <div class="agent-chip">
-          
-          <span class="name">Gemini CLI</span>
-        </div>
-        <div class="agent-chip">
-          
-          <span class="name">Hermes</span>
-        </div>
-        <div class="agent-chip">
-          
-          <span class="name">OpenClaw</span>
-        </div>
+        <div class="agent-chip"><span class="name">Claude Code</span></div>
+        <div class="agent-chip"><span class="name">Codex</span></div>
+        <div class="agent-chip"><span class="name">Cursor</span></div>
+        <div class="agent-chip"><span class="name">OpenCode</span></div>
+        <div class="agent-chip"><span class="name">Gemini CLI</span></div>
+        <div class="agent-chip"><span class="name">Hermes</span></div>
+        <div class="agent-chip"><span class="name">OpenClaw</span></div>
       </div>
     </section>
 
@@ -484,7 +383,7 @@
         const x = r.left + r.width / 2 - cRect.left;
         const y = r.bottom - cRect.top;
         const cx = (x + hubX) / 2;
-        const cy = y + (hubY - y) * 0.55;
+        const cy = y + (hubY - y) * 0.62;
         const opacity = 0.2 + (i % 3) * 0.05;
         paths += `<path d="M${x.toFixed(1)},${(y + 2).toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${hubX.toFixed(1)},${(hubY - 2).toFixed(1)}"
           fill="none" stroke="rgba(129,140,248,${opacity.toFixed(2)})" stroke-width="1.5" stroke-dasharray="5 7"/>`;
@@ -500,6 +399,5 @@
       });
     });
   </script>
-
 
 </body></html>
