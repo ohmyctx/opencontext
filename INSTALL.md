@@ -76,7 +76,8 @@ oc status --format json
 
 Rules for agents:
 
-- Prefer `--format json` or `--json` when parsing output.
+- In non-TTY execution, `oc` defaults to JSON output. Still pass `--format json` when the surrounding workflow depends on machine-readable output, because it documents intent.
+- Use `--format table` only when the user explicitly wants human-readable tables.
 - Use long flags only, for example `--subscription`, `--source`, `--since`, `--daemon`.
 - Before running a side-effect command, inspect it with `oc schema <command...> --format json`.
 - For commands with `--dry-run`, run the dry run first and show the user what will change.

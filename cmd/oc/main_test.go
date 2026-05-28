@@ -50,6 +50,42 @@ func TestSchemaIncludesBrowserChromeInstallFlags(t *testing.T) {
 	}
 }
 
+func TestConfigureOutputModeDefaultsToJSONForNonTTY(t *testing.T) {
+	oldFormat := outputFormat
+	oldJSON := jsonOut
+	defer func() {
+		outputFormat = oldFormat
+		jsonOut = oldJSON
+	}()
+
+	outputFormat = ""
+	jsonOut = false
+	if err := configureOutputMode(); err != nil {
+		t.Fatalf("configureOutputMode() error = %v", err)
+	}
+	if !jsonOut {
+		t.Fatal("expected non-TTY test stdout to default to JSON output")
+	}
+}
+
+func TestConfigureOutputModeTableOverridesNonTTYDefault(t *testing.T) {
+	oldFormat := outputFormat
+	oldJSON := jsonOut
+	defer func() {
+		outputFormat = oldFormat
+		jsonOut = oldJSON
+	}()
+
+	outputFormat = "table"
+	jsonOut = true
+	if err := configureOutputMode(); err != nil {
+		t.Fatalf("configureOutputMode() error = %v", err)
+	}
+	if jsonOut {
+		t.Fatal("expected --format table to disable JSON output")
+	}
+}
+
 func schemaHasFlag(schema commandSchema, name string) bool {
 	for _, flag := range schema.Flags {
 		if flag.Name == name {

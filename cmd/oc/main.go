@@ -57,21 +57,13 @@ Environment variables:
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			switch outputFormat {
-			case "", "table":
-				return nil
-			case "json":
-				jsonOut = true
-				return nil
-			default:
-				return fmt.Errorf("invalid --format %q; use json or table", outputFormat)
-			}
+			return configureOutputMode()
 		},
 	}
 
 	root.PersistentFlags().StringVar(&daemonURL, "daemon", envOrDefault("OC_DAEMON_URL", "http://localhost:6060"), "OpenContext daemon base URL")
 	root.PersistentFlags().BoolVar(&jsonOut, "json", false, "output as JSON")
-	root.PersistentFlags().StringVar(&outputFormat, "format", "", "output format: json|table (default: table for humans)")
+	root.PersistentFlags().StringVar(&outputFormat, "format", "", "output format: json|table (default: table on TTY, json otherwise)")
 
 	root.AddCommand(
 		buildDaemonCmd(),
@@ -358,6 +350,22 @@ func buildDaemonStatusCmd() *cobra.Command {
 			if !st.Installed {
 				state = "not installed"
 			}
+			result := map[string]any{
+				"status":    state,
+				"installed": st.Installed,
+				"running":   st.Running,
+				"platform":  st.Platform,
+			}
+			if st.PID > 0 {
+				result["pid"] = st.PID
+			}
+			if meta, err := service.LoadMeta(); err == nil {
+				result["log"] = meta.LogFile
+				result["workdir"] = meta.WorkDir
+			}
+			if jsonOut {
+				return printJSON(result)
+			}
 			fmt.Println("OpenContext daemon service")
 			fmt.Printf("  status:   %s\n", state)
 			fmt.Printf("  platform: %s\n", st.Platform)
@@ -530,12 +538,18 @@ func buildEventsCmd() *cobra.Command {
 				if err := c.DeleteEventsBySource(ctx, source); err != nil {
 					return fmt.Errorf("delete %s events: %w", source, err)
 				}
+				if jsonOut {
+					return printJSON(map[string]any{"status": "deleted", "source": source})
+				}
 				fmt.Printf("Deleted all events with source: %s\n", source)
 				return nil
 			}
 
 			if err := c.DeleteAllEvents(ctx); err != nil {
 				return fmt.Errorf("delete events: %w", err)
+			}
+			if jsonOut {
+				return printJSON(map[string]any{"status": "deleted"})
 			}
 			fmt.Println("Deleted all events.")
 			return nil
@@ -564,6 +578,19 @@ func buildCompileCmd() *cobra.Command {
 
 			if err := c.TriggerCompile(ctx, subName); err != nil {
 				return fmt.Errorf("trigger compile: %w", err)
+			}
+
+			if jsonOut {
+				subscription := subName
+				if subscription == "" {
+					subscription = "all"
+				}
+				return printJSON(map[string]any{
+					"status":       "triggered",
+					"subscription": subscription,
+					"async":        true,
+					"suggestion":   "Check the configured memory.md path after a short delay.",
+				})
 			}
 
 			if subName == "" {
@@ -1433,6 +1460,32 @@ func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(v)
+}
+
+func configureOutputMode() error {
+	switch outputFormat {
+	case "":
+		if !stdoutIsTerminal() {
+			jsonOut = true
+		}
+		return nil
+	case "table":
+		jsonOut = false
+		return nil
+	case "json":
+		jsonOut = true
+		return nil
+	default:
+		return fmt.Errorf("invalid --format %q; use json or table", outputFormat)
+	}
+}
+
+func stdoutIsTerminal() bool {
+	info, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 func printErrorJSON(err error) error {
