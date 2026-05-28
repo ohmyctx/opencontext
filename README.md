@@ -1,10 +1,51 @@
-# OpenContext
+<p align="center">
+  <img src="./docs/images/banner.svg" alt="OpenContext Banner" width="800"/>
+</p>
 
-> Local-first work memory for AI agents.
+<p align="center">
+  <a href="https://github.com/ohmyctx/opencontext/releases">
+    <img src="https://img.shields.io/github/v/release/ohmyctx/opencontext?include_prereleases&color=6366f1" alt="Release"/>
+  </a>
+  <a href="https://www.npmjs.com/package/@ohmyctx/opencontext">
+    <img src="https://img.shields.io/npm/v/@ohmyctx/opencontext?logo=npm&color=0891b2" alt="npm version"/>
+  </a>
+  <a href="https://www.npmjs.com/package/@ohmyctx/opencontext">
+    <img src="https://img.shields.io/npm/dm/@ohmyctx/opencontext?logo=npm&color=64748b" alt="npm downloads"/>
+  </a>
+  <a href="https://github.com/ohmyctx/opencontext/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
+  </a>
+  <a href="https://goreportcard.com/report/github.com/ohmyctx/opencontext">
+    <img src="https://goreportcard.com/badge/github.com/ohmyctx/opencontext" alt="Go Report Card"/>
+  </a>
+</p>
 
-[中文文档](README.zh-CN.md) · [Agent install guide](INSTALL.md) · [Protocol](docs/PROTOCOL.md) · [Collectors](docs/COLLECTORS.md) · [Collector architecture](docs/COLLECTOR_ARCHITECTURE.md)
+<p align="center">
+  <a href="./README.md">English</a> · <a href="./README.zh-CN.md">中文</a>
+</p>
 
-OpenContext watches lightweight work signals from the tools you already use, stores them locally, and turns them into a Markdown memory file that coding agents can read before they ask you to repeat context.
+<p align="center">
+  <a href="INSTALL.md">Agent install guide</a> ·
+  <a href="docs/PROTOCOL.md">Protocol</a> ·
+  <a href="docs/COLLECTORS.md">Collectors</a> ·
+  <a href="docs/COLLECTOR_ARCHITECTURE.md">Collector architecture</a>
+</p>
+
+<br>
+
+<p align="center">
+  <b>Give every AI agent memory of what you actually did.</b>
+</p>
+
+<p align="center">
+  OpenContext watches lightweight work signals from the tools you already use,<br/>
+  stores them locally, and turns them into a Markdown memory file<br/>
+  that coding agents can read before they ask you to repeat context.
+</p>
+
+<p align="center">
+  <img src="docs/images/concept.png" alt="OpenContext Architecture" width="90%"/>
+</p>
 
 ```text
 You: "Continue the auth refactor from this morning."

@@ -1,13 +1,54 @@
-# OpenContext
+<p align="center">
+  <img src="./docs/images/banner.svg" alt="OpenContext Banner" width="800"/>
+</p>
 
-> 给 AI Agent 用的本地工作记忆层。
+<p align="center">
+  <a href="https://github.com/ohmyctx/opencontext/releases">
+    <img src="https://img.shields.io/github/v/release/ohmyctx/opencontext?include_prereleases&color=6366f1" alt="Release"/>
+  </a>
+  <a href="https://www.npmjs.com/package/@ohmyctx/opencontext">
+    <img src="https://img.shields.io/npm/v/@ohmyctx/opencontext?logo=npm&color=0891b2" alt="npm version"/>
+  </a>
+  <a href="https://www.npmjs.com/package/@ohmyctx/opencontext">
+    <img src="https://img.shields.io/npm/dm/@ohmyctx/opencontext?logo=npm&color=64748b" alt="npm downloads"/>
+  </a>
+  <a href="https://github.com/ohmyctx/opencontext/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
+  </a>
+  <a href="https://goreportcard.com/report/github.com/ohmyctx/opencontext">
+    <img src="https://goreportcard.com/badge/github.com/ohmyctx/opencontext" alt="Go Report Card"/>
+  </a>
+</p>
 
-[English](README.md) · [Agent 安装指南](INSTALL.md) · [协议文档](docs/PROTOCOL.md) · [Collector 文档](docs/COLLECTORS.md) · [Collector 架构](docs/COLLECTOR_ARCHITECTURE.md)
+<p align="center">
+  <a href="./README.md">English</a> · <a href="./README.zh-CN.md">中文</a>
+</p>
 
-OpenContext 会采集你日常开发工具里的轻量信号，把它们存在本地，并生成 Agent 可直接读取的 `memory.md`。这样 Agent 不需要每次都问你“刚才做了什么、哪个测试失败了、上下文在哪里”。
+<p align="center">
+  <a href="INSTALL.md">Agent 安装指南</a> ·
+  <a href="docs/PROTOCOL.md">协议文档</a> ·
+  <a href="docs/COLLECTORS.md">Collector 文档</a> ·
+  <a href="docs/COLLECTOR_ARCHITECTURE.md">Collector 架构</a>
+</p>
+
+<br>
+
+<p align="center">
+  <b>让每个 AI Agent 都能记住你实际做过什么。</b>
+</p>
+
+<p align="center">
+  OpenContext 会采集你日常开发工具里的轻量信号，<br/>
+  把它们存在本地，并生成 Agent 可直接读取的 Markdown 记忆文件，<br/>
+  这样 Agent 不需要每次都问你「刚才做了什么、上下文在哪里」。
+</p>
+
+<p align="center">
+  <img src="docs/images/concept.png" alt="OpenContext 架构图" width="90%"/>
+</p>
 
 ```text
-你说：“继续早上那个 auth refactor。”
+你说："继续早上那个 auth refactor。"
 
 没有 OpenContext：Agent 先问你改了什么、哪里失败、从哪个文件开始。
 有 OpenContext：   Agent 可以先读 memory.md，看到最近命令、失败构建、

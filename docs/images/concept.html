@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1400" />
+  <title>OpenContext — Concept</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 1400px;
+      height: 760px;
+      overflow: hidden;
+      background: #080c18;
+      font-family: Inter, system-ui, sans-serif;
+      color: #e2e8f0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .canvas {
+      position: relative;
+      width: 1400px;
+      height: 760px;
+      padding: 40px 64px 32px;
+      background:
+        radial-gradient(ellipse 900px 420px at 50% 38%, rgba(99,102,241,0.11), transparent 70%),
+        radial-gradient(ellipse 500px 300px at 50% 72%, rgba(34,211,238,0.06), transparent 65%),
+        #080c18;
+    }
+
+    .canvas::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(148,163,184,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148,163,184,0.035) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: radial-gradient(ellipse 90% 80% at 50% 45%, black 20%, transparent 100%);
+      pointer-events: none;
+    }
+
+    .stage-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #475569;
+      text-align: center;
+    }
+
+    /* ── Stage 1: scattered signals ── */
+    .signals-zone {
+      position: relative;
+      height: 200px;
+      margin-bottom: 8px;
+    }
+
+    .signals-zone .stage-label {
+      margin-bottom: 20px;
+    }
+
+    .signal {
+      position: absolute;
+      width: 178px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .signal-type {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .signal-type.shell { color: #4ade80; }
+    .signal-type.git { color: #fb923c; }
+    .signal-type.browser { color: #60a5fa; }
+    .signal-type.build { color: #f87171; }
+    .signal-type.ide { color: #a78bfa; }
+    .signal-type.claude { color: #e8b4a0; }
+    .signal-type.codex { color: #94a3b8; }
+
+    .signal-body {
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 11px;
+      font-weight: 400;
+      color: #cbd5e1;
+      line-height: 1.45;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .signal-body .bad { color: #f87171; }
+    .signal-body .good { color: #4ade80; }
+
+    /* positions — organic scatter */
+    .signal:nth-child(2)  { left: 48px;  top: 36px; }
+    .signal:nth-child(3)  { left: 248px; top: 18px; }
+    .signal:nth-child(4)  { left: 468px; top: 42px; }
+    .signal:nth-child(5)  { left: 688px; top: 14px; }
+    .signal:nth-child(6)  { left: 908px; top: 38px; }
+    .signal:nth-child(7)  { left: 1128px;top: 22px; }
+    .signal:nth-child(8)  { left: 148px; top: 108px; }
+    .signal:nth-child(9)  { left: 368px; top: 118px; }
+    .signal:nth-child(10) { left: 688px; top: 104px; }
+    .signal:nth-child(11) { left: 988px; top: 104px; }
+
+    .gather-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      overflow: visible;
+    }
+
+    /* ── Stage 2: OpenContext collector ── */
+    .collector-zone {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 28px;
+    }
+
+    .collector-ring {
+      position: absolute;
+      width: 340px;
+      height: 340px;
+      border-radius: 50%;
+      border: 1px solid rgba(99,102,241,0.12);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -58%);
+      pointer-events: none;
+    }
+
+    .collector-ring:nth-child(2) {
+      width: 420px;
+      height: 420px;
+      border-color: rgba(99,102,241,0.07);
+    }
+
+    .oc-hub {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 32px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(99,102,241,0.95), rgba(8,145,178,0.9));
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 0 48px rgba(99,102,241,0.3), 0 16px 40px rgba(0,0,0,0.35);
+    }
+
+    .oc-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .oc-mark svg { width: 30px; height: 30px; }
+
+    .oc-name {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: #fff;
+    }
+
+    .oc-steps {
+      margin-top: 14px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .oc-step {
+      font-size: 11px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.7);
+      padding: 5px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.18);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .oc-step.active {
+      color: #fff;
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    /* ── Stage 3: compile output ── */
+    .compile-zone {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 28px;
+    }
+
+    .compile-stream {
+      width: 2px;
+      height: 28px;
+      background: linear-gradient(180deg, rgba(99,102,241,0.5), rgba(34,211,238,0.6));
+      border-radius: 1px;
+      margin-bottom: 12px;
+    }
+
+    .memory-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 22px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(129, 140, 248, 0.35);
+      box-shadow: 0 0 24px rgba(99,102,241,0.15);
+    }
+
+    .memory-card .icon {
+      width: 14px;
+      height: 16px;
+      border-left: 2px solid #818cf8;
+      border-bottom: 2px solid #818cf8;
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+
+    .memory-card .filename {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 15px;
+      font-weight: 500;
+      color: #c7d2fe;
+    }
+
+    .memory-card .hint {
+      font-size: 11px;
+      color: #64748b;
+      margin-left: 8px;
+    }
+
+    /* ── Stage 4: agent memory targets ── */
+    .flush-zone {
+      position: relative;
+      z-index: 2;
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .flush-zone .stage-label {
+      margin-bottom: 10px;
+    }
+
+    .flush-hint {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 14px;
+    }
+
+    .agent-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      max-width: 900px;
+    }
+
+    .agent-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px 7px 10px;
+      border-radius: 10px;
+      background: rgba(30, 41, 59, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .agent-chip .logo {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: #1e293b;
+    }
+
+    .agent-chip .logo.dark { background: #0a0a0a; }
+    .agent-chip .logo.claude { background: #CC785C; }
+    .agent-chip .logo.opencode { background: #131010; }
+
+    .agent-chip .logo img {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+    }
+
+    .agent-chip .logo.opencode img {
+      width: 22px;
+      height: 22px;
+    }
+
+    .agent-chip .name {
+      font-size: 11px;
+      font-weight: 500;
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+
+    .tagline {
+      position: absolute;
+      bottom: 28px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 500;
+      color: #64748b;
+      letter-spacing: -0.01em;
+    }
+
+    .tagline em {
+      font-style: normal;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas" id="canvas">
+
+    <svg class="gather-svg" id="gather" xmlns="http://www.w3.org/2000/svg"></svg>
+
+    <!-- Stage 1 -->
+    <section class="signals-zone" id="signals">
+      <div class="stage-label">Beyond the chat</div>
+
+      <div class="signal" data-signal>
+        <div class="signal-type shell">shell</div>
+        <div class="signal-body">go test ./pkg/auth <span class="bad">✗ exit 1</span></div>
+      </div>
+      <div class="signal" data-signal>
+        <div class="signal-type git">git</div>
+        <div class="signal-body">commit · fix oauth callback</div>
+      </div>
+      <div class="signal" data-signal>
+        <div class="signal-type browser">browser</div>
+        <div class="signal-body">stripe.com/docs/webhooks</div>
+      </div>
+      <div class="signal" data-signal>
+        <div class="signal-type build">build</div>
+        <div class="signal-body">3 errors in <span class="bad">auth/</span></div>
+      </div>
+      <div class="signal" data-signal>
+        <div class="signal-type ide">ide</div>
+        <div class="signal-body">edited middleware.go</div>
+      </div>
+      <div class="signal" data-signal>
+        <div class="signal-type shell">shell</div>
+        <div class="signal-body">npm run lint <span class="good">✓</span></div>
+      </div>
+      <div class="signal" data-signal>
+        <div class="signal-type claude">claude</div>
+        <div class="signal-body">"Continue the auth refactor…"</div>
+      </div>
+      <div class="signal" data-signal>
+        <div class="signal-type codex">codex</div>
+        <div class="signal-body">"Fix the failing tests in auth/"</div>
+      </div>
+      <div class="signal" data-signal>
+        <div class="signal-type browser">browser</div>
+        <div class="signal-body">github.com/…/pull/42</div>
+      </div>
+      <div class="signal" data-signal>
+        <div class="signal-type ide">ide</div>
+        <div class="signal-body">focused api/routes.go</div>
+      </div>
+    </section>
+
+    <!-- Stage 2 -->
+    <section class="collector-zone" id="collector">
+      <div class="collector-ring"></div>
+      <div class="collector-ring"></div>
+      <div class="oc-hub" id="hub">
+        <div class="oc-mark">
+          <svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="22" cy="22" r="14" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+            <circle cx="22" cy="22" r="9" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
+            <circle cx="22" cy="22" r="4" fill="#fff"/>
+            <circle cx="32" cy="12" r="2.5" fill="#a5f3fc"/>
+          </svg>
+        </div>
+        <span class="oc-name">OpenContext</span>
+      </div>
+      <div class="oc-steps">
+        <span class="oc-step active">collect</span>
+        <span class="oc-step active">filter</span>
+        <span class="oc-step active">compile</span>
+      </div>
+    </section>
+
+    <!-- Stage 3 -->
+    <section class="compile-zone">
+      <div class="compile-stream"></div>
+      <div class="memory-card">
+        <span class="icon"></span>
+        <span class="filename">memory.md</span>
+        <span class="hint">local · privacy-aware</span>
+      </div>
+    </section>
+
+    <!-- Stage 4 -->
+    <section class="flush-zone">
+      <div class="stage-label">Agent memory</div>
+      <p class="flush-hint">memory injected into</p>
+      <div class="agent-row">
+        <div class="agent-chip">
+          <span class="logo claude"><img src="logos/claude-icon.svg" alt="" /></span>
+          <span class="name">Claude Code</span>
+        </div>
+        <div class="agent-chip">
+          <span class="logo dark"><img src="logos/openai.svg" alt="" style="filter:brightness(0) invert(1)" /></span>
+          <span class="name">Codex</span>
+        </div>
+        <div class="agent-chip">
+          <span class="logo dark"><img src="logos/cursor.svg" alt="" /></span>
+          <span class="name">Cursor</span>
+        </div>
+        <div class="agent-chip">
+          <span class="logo opencode"><img src="logos/opencode-icon.svg" alt="" /></span>
+          <span class="name">OpenCode</span>
+        </div>
+        <div class="agent-chip">
+          <span class="logo"><img src="logos/gemini.svg" alt="" /></span>
+          <span class="name">Gemini CLI</span>
+        </div>
+        <div class="agent-chip">
+          <span class="logo"><img src="logos/hermes.png" alt="" /></span>
+          <span class="name">Hermes</span>
+        </div>
+        <div class="agent-chip">
+          <span class="logo"><img src="logos/openclaw.svg" alt="" /></span>
+          <span class="name">OpenClaw</span>
+        </div>
+      </div>
+    </section>
+
+    <p class="tagline">Agents start with <em>what you actually did</em> — not a blank session.</p>
+  </div>
+
+  <script>
+    function drawGatherLines() {
+      const canvas = document.getElementById('canvas');
+      const svg = document.getElementById('gather');
+      const hub = document.getElementById('hub');
+      const signals = document.querySelectorAll('[data-signal]');
+
+      const cRect = canvas.getBoundingClientRect();
+      svg.setAttribute('viewBox', `0 0 ${cRect.width} ${cRect.height}`);
+
+      const hubRect = hub.getBoundingClientRect();
+      const hubX = hubRect.left + hubRect.width / 2 - cRect.left;
+      const hubY = hubRect.top - cRect.top;
+
+      let paths = '';
+      signals.forEach((el, i) => {
+        const r = el.getBoundingClientRect();
+        const x = r.left + r.width / 2 - cRect.left;
+        const y = r.bottom - cRect.top;
+        const cx = (x + hubX) / 2;
+        const cy = y + (hubY - y) * 0.55;
+        const opacity = 0.2 + (i % 3) * 0.05;
+        paths += `<path d="M${x.toFixed(1)},${(y + 2).toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${hubX.toFixed(1)},${(hubY - 2).toFixed(1)}"
+          fill="none" stroke="rgba(129,140,248,${opacity.toFixed(2)})" stroke-width="1.5" stroke-dasharray="5 7"/>`;
+      });
+
+      svg.innerHTML = paths;
+    }
+
+    window.addEventListener('load', () => {
+      requestAnimationFrame(() => {
+        drawGatherLines();
+        requestAnimationFrame(drawGatherLines);
+      });
+    });
+  </script>
+</body>
+</html>
