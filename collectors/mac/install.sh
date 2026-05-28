@@ -27,7 +27,6 @@ APP_DIR="$HOME/Applications/OpenContextCollector.app"
 APP_MACOS="$APP_DIR/Contents/MacOS"
 APP_RESOURCES="$APP_DIR/Contents/Resources"
 APP_EXEC="$APP_MACOS/opencontext-collector"
-SERVICE_EXEC="$HOME/.opencontext/bin/opencontext-mac-collector"
 
 # ── Python ────────────────────────────────────────────────────────────────────
 if command -v python3 &>/dev/null; then
@@ -125,9 +124,6 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
-mkdir -p "$(dirname "$SERVICE_EXEC")"
-cp "$APP_EXEC" "$SERVICE_EXEC"
-chmod +x "$SERVICE_EXEC"
 
 echo ""
 echo "Checking macOS Accessibility permission …"
@@ -142,6 +138,7 @@ if [[ "$ACCESSIBILITY_OK" -eq 0 && "$PROMPT_PERMISSIONS" -eq 1 ]]; then
   "$APP_EXEC" --prompt-permissions >/tmp/opencontext-mac-permission.json 2>/dev/null || true
   open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" >/dev/null 2>&1 || true
   open -R "$APP_DIR" >/dev/null 2>&1 || true
+  open -R "$VENV/bin/python" >/dev/null 2>&1 || true
 fi
 
 echo ""
@@ -154,10 +151,13 @@ if [[ "$ACCESSIBILITY_OK" -eq 0 ]]; then
   echo "     Add and enable this app:"
   echo "     $APP_DIR"
   echo ""
-  echo "     If you run the collector as a background service, enable this launcher too:"
-  echo "     $SERVICE_EXEC"
+  echo "     Then run the check below. If it is still false, add this Python executable too:"
+  echo "     $VENV/bin/python"
   echo ""
-  echo "     If macOS still lists Python separately, enable this executable as a fallback:"
+  echo "     To reveal it in Finder:"
+  echo "     open -R \"$VENV/bin/python\""
+  echo ""
+  echo "     Or in the file picker press Cmd+Shift+G and paste:"
   echo "     $VENV/bin/python"
   echo ""
   echo "     Verify after granting:"
@@ -169,7 +169,6 @@ echo ""
 echo "  2. Start the collector:"
 echo "     bash $SCRIPT_DIR/run.sh"
 echo "     or: $APP_EXEC"
-echo "     service launcher: $SERVICE_EXEC"
 echo ""
 echo "  3. (Optional) Edit config:"
 echo "     mkdir -p ~/.opencontext"

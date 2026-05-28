@@ -39,7 +39,17 @@ Go to **System Settings → Privacy & Security → Accessibility** and add:
 ~/Applications/OpenContextCollector.app
 ```
 
-If the collector runs as a background service, also enable `~/.opencontext/bin/opencontext-mac-collector`. If macOS still lists Python separately, enable the Python executable shown by `install.sh`.
+Then run `bash run.sh --check-permissions`. If it still reports
+`"accessibility": false`, macOS is applying the permission to the Python process.
+Run this command to reveal the exact executable in Finder, then drag or add it
+from the Accessibility picker:
+
+```bash
+open -R "$PWD/.venv/bin/python"
+```
+
+In the file picker you can also press `Cmd+Shift+G` and paste the Python path
+printed by `install.sh`.
 
 Without this permission, app launch and clipboard monitoring can still work, but
 window titles, browser URLs, UI element names, and text-input capture may be incomplete.
@@ -60,7 +70,7 @@ Run the prompt command from Terminal or iTerm on the Mac. A collector started
 from a headless SSH session may not be able to display the macOS permission
 prompt. If the collector runs via LaunchAgent, grant Accessibility access to
 the terminal app used during setup and, if macOS shows it separately, the
-`~/Applications/OpenContextCollector.app`. For background service installs, also enable `~/.opencontext/bin/opencontext-mac-collector`. If macOS lists Python separately, enable the Python executable shown by `install.sh` too.
+`~/Applications/OpenContextCollector.app`. This is also the executable used by the background LaunchAgent. If the permission check is still false, reveal and enable the Python executable shown by `install.sh`.
 
 Clipboard events are captured through `NSPasteboard` and normally do not require
 Accessibility permission, but they are L3 events. They only appear in generated
