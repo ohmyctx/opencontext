@@ -102,6 +102,7 @@ flowchart LR
 | Codex | `oc collector codex install` | 安装 Codex hook adapter |
 | Cursor | `oc collector cursor install` | 安装 Cursor hook adapter |
 | OpenCode | `oc collector opencode install` | 安装 OpenCode hook adapter |
+| Chrome browser | 见 [Browser collector guide](collectors/browser/README.md) | 可选浏览器扩展，采集页面访问、tab focus、搜索、表单和明确页面操作 |
 | macOS activity | 见 [Collector 安装指南](docs/COLLECTOR_INSTALL.md) | 可选外部 collector，需要 Accessibility 权限 |
 | Windows activity | 见 [Collector 安装指南](docs/COLLECTOR_INSTALL.md) | 可选外部 collector，可前台运行或接入任务计划 |
 

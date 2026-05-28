@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>OpenContext Browser Collector</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <h1>OpenContext Browser Collector</h1>
+
+      <label>
+        OpenContext daemon URL
+        <input id="daemonUrl" type="url" placeholder="http://127.0.0.1:6060">
+      </label>
+
+      <label>
+        Browser name
+        <input id="browserName" type="text" placeholder="chrome">
+      </label>
+
+      <fieldset>
+        <legend>Capture</legend>
+        <label><input id="capturePageVisits" type="checkbox"> Page visits with duration</label>
+        <label><input id="captureTabFocus" type="checkbox"> Tab focus</label>
+        <label><input id="captureActions" type="checkbox"> Link clicks, button clicks, form submits, searches</label>
+        <label><input id="captureInputs" type="checkbox"> Submitted text input content</label>
+      </fieldset>
+
+      <label>
+        Max sensitivity
+        <select id="maxSensitivity">
+          <option value="1">L1 metadata only</option>
+          <option value="2">L2 structured content</option>
+          <option value="3">L3 sensitive content</option>
+        </select>
+      </label>
+
+      <label>
+        Ignored domains, one per line
+        <textarea id="ignoredDomains" rows="5" placeholder="bank.example.com&#10;mail.example.com"></textarea>
+      </label>
+
+      <div class="actions">
+        <button id="save" type="button">Save</button>
+        <button id="test" type="button">Send Test Event</button>
+      </div>
+
+      <p id="status"></p>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

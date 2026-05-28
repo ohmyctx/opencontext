@@ -221,6 +221,11 @@ Use existing source/type pairs when they fit. Only introduce new ones if nothing
 | `git` | `pr_create` | A pull request was opened |
 | `browser` | `page_visit` | User visited a web page |
 | `browser` | `tab_focus` | User focused a browser tab |
+| `browser` | `link_click` | User clicked a link |
+| `browser` | `button_click` | User clicked a semantic button |
+| `browser` | `search` | User submitted a search query |
+| `browser` | `form_submit` | User submitted a form |
+| `browser` | `text_input` | User submitted text input content |
 | `ide` | `file_save` | A file was saved in the editor |
 | `ide` | `file_open` | A file was opened in the editor |
 | `ide` | `search` | A search was performed in the editor |
@@ -669,11 +674,11 @@ Before publishing your collector, verify:
 
 ---
 
-## Ideas for Future Collectors
+## Collector Ideas
 
 | Collector | Trigger | Events | Value |
 |-----------|---------|--------|-------|
-| **Browser extension** | Tab focus/unload | `browser.page_visit` | Captures research and documentation reading |
+| **Browser extension** | Tab focus/unload/click/search/form | `browser.page_visit`, `browser.search`, `browser.form_submit` | Captures research and web workflow context |
 | **Test runner** | Detect `pytest`, `go test`, `jest` output | `test.run` | Pass/fail rate is high-signal debugging context |
 | **Docker events** | `docker events --format json` stream | `docker.container_crash` | Container instability correlates with active debugging |
 | **Cursor/VSCode extension** | `onDidSaveTextDocument`, `onDidChangeActiveEditor` | `ide.file_save`, `ide.file_open` | File activity is more precise than shell commands |

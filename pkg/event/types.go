@@ -48,8 +48,11 @@ const (
 	EventTypeSystemIdle    EventType = "system_idle"
 
 	// browser
-	EventTypePageVisit EventType = "page_visit"
-	EventTypeTabFocus  EventType = "tab_focus"
+	EventTypePageVisit   EventType = "page_visit"
+	EventTypeTabFocus    EventType = "tab_focus"
+	EventTypeLinkClick   EventType = "link_click"
+	EventTypeButtonClick EventType = "button_click"
+	EventTypeFormSubmit  EventType = "form_submit"
 
 	// ide
 	EventTypeFileSave EventType = "file_save"

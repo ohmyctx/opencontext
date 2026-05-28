@@ -83,6 +83,11 @@ const (
     // browser
     EventTypePageVisit   EventType = "page_visit"
     EventTypeTabFocus    EventType = "tab_focus"
+    EventTypeLinkClick   EventType = "link_click"
+    EventTypeButtonClick EventType = "button_click"
+    EventTypeFormSubmit  EventType = "form_submit"
+    EventTypeSearch      EventType = "search"
+    EventTypeTextInput   EventType = "text_input"
 
     // ide
     EventTypeFileSave    EventType = "file_save"

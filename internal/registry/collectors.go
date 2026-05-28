@@ -85,6 +85,17 @@ func AllCollectors() []CollectorManifest {
 			Install:     []string{"oc collector opencode install"},
 		},
 		{
+			Name:        "browser-chrome",
+			DisplayName: "Chrome Browser",
+			Version:     "repo",
+			Kind:        KindExternal,
+			Description: "Chrome Manifest V3 extension for page visits, tab focus, searches, form submits, and explicit page actions.",
+			Platforms:   []string{"darwin", "linux", "windows"},
+			Sources:     []string{string(event.SourceBrowser)},
+			Install:     []string{"see collectors/browser/README.md"},
+			Docs:        "collectors/browser/README.md",
+		},
+		{
 			Name:        "macos",
 			DisplayName: "macOS Activity",
 			Version:     "repo",

@@ -25,6 +25,7 @@ Recommended default: install only the collectors for tools the user actually use
 | Codex | `oc collector codex install` | user uses Codex CLI |
 | Cursor | `oc collector cursor install` | user uses Cursor hooks |
 | OpenCode | `oc collector opencode install` | user uses OpenCode |
+| Chrome browser | read `collectors/browser/README.md` | user wants browser page/search/form/action activity |
 | macOS activity | read `docs/COLLECTOR_INSTALL.md` | user wants app/window/click/text activity on macOS |
 | Windows activity | read `docs/COLLECTOR_INSTALL.md` | user wants app/window/click/text activity on Windows |
 
@@ -35,7 +36,7 @@ The shell and agent hook collectors are bundled in `oc`. The macOS and Windows a
 Ask these questions before changing files:
 
 1. Which activity sources should OpenContext collect?
-   Suggested choices: shell, Claude Code, Codex, Cursor, OpenCode, macOS activity, Windows activity.
+   Suggested choices: shell, Claude Code, Codex, Cursor, OpenCode, Chrome browser, macOS activity, Windows activity.
 
 2. Where should OpenContext memory be connected?
    Suggested choices: Claude Code, Cursor or other project agents via a project memory file, Hermes, OpenClaw, standalone `~/.opencontext/memory.md`.
@@ -135,6 +136,12 @@ oc collector claude install
 oc collector codex install
 oc collector cursor install
 oc collector opencode install
+```
+
+If the user selected Chrome browser, read:
+
+```text
+collectors/browser/README.md
 ```
 
 If the user selected macOS activity or Windows activity, stop here and read:

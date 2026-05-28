@@ -29,10 +29,13 @@ receives those hook payloads at `/api/v1/hooks/<tool>`.
 Standalone activity collectors live in this repository:
 
 - `collectors/shell`
+- `collectors/browser/chrome`
 - `collectors/mac`
 - `collectors/windows`
 
 They are intentionally installed only when the user asks for OS-level activity capture because they require extra dependencies and platform permissions. The current repo implementations use Python, but OpenContext's collector contract is language-agnostic.
+
+Browser extension collectors are installed through the browser's extension UI. For Chrome, see `collectors/browser/README.md`.
 
 ## Build Your Own Collector
 

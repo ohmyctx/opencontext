@@ -106,6 +106,7 @@ The default distribution keeps the core collectors inside the `oc` binary so ins
 | Codex | `oc collector codex install` | installs Codex hook adapter |
 | Cursor | `oc collector cursor install` | installs Cursor hook adapter |
 | OpenCode | `oc collector opencode install` | installs OpenCode hook adapter |
+| Chrome browser | see [Browser collector guide](collectors/browser/README.md) | optional extension for page visits, tab focus, searches, forms, and explicit page actions |
 | macOS activity | see [Collector install guide](docs/COLLECTOR_INSTALL.md) | optional external collector, requires Accessibility permission |
 | Windows activity | see [Collector install guide](docs/COLLECTOR_INSTALL.md) | optional external collector, can run foreground or via Task Scheduler |
 
