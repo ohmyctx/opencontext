@@ -131,8 +131,13 @@ cd ~/.opencontext/collectors/opencontext/collectors/mac
 bash install.sh
 ```
 
-This creates a local `.venv` and installs Python dependencies.
-It also attempts to trigger the macOS Accessibility permission prompt and opens the matching System Settings page.
+This creates a local `.venv`, installs Python dependencies, and creates:
+
+```text
+~/Applications/OpenContextCollector.app
+```
+
+The app wrapper is the primary macOS permission target. For background service installs, the installer also creates `~/.opencontext/bin/opencontext-mac-collector` as a stable service launcher, which is still much clearer than browsing for Python inside a virtualenv. The installer also attempts to trigger the macOS Accessibility permission prompt and opens the matching System Settings page.
 
 ### Permissions
 
@@ -142,7 +147,7 @@ Ask the user to grant Accessibility permission:
 System Settings -> Privacy & Security -> Accessibility
 ```
 
-Add the terminal app or the app that will run the collector. If macOS lists the Python executable separately, add and enable `collectors/mac/.venv/bin/python` too.
+Add and enable `~/Applications/OpenContextCollector.app`. If the collector runs as a background service, also add `~/.opencontext/bin/opencontext-mac-collector`. If macOS lists the Python executable separately, add and enable `collectors/mac/.venv/bin/python` too.
 
 Without this permission, app launch and clipboard monitoring can still work, but window titles, browser URLs, click element names, and text input capture may be incomplete.
 
@@ -158,11 +163,11 @@ Prompt macOS to open the Accessibility permission flow:
 bash run.sh --prompt-permissions
 ```
 
-Run the prompt command from Terminal or iTerm on the Mac. Do not rely on a
-headless SSH session to request this permission; macOS may not show the TCC
-prompt for SSH-launched processes. If the collector is later run by launchd,
-the user may also need to grant Accessibility access to the Python executable
-inside `collectors/mac/.venv/bin/python` if macOS lists it separately.
+Run the prompt command from Terminal, iTerm, or Warp on the Mac. Do not rely on
+a headless SSH session to request this permission; macOS may not show the TCC
+prompt for SSH-launched processes. If macOS still lists Python separately, the
+user may also need to grant Accessibility access to the Python executable inside
+`collectors/mac/.venv/bin/python`.
 
 Clipboard events are `sensitivity: 3`. If they are visible with `oc events --source os --max-sensitivity 3` but absent from generated memory, update the selected subscription's `filter.max_sensitivity` to `3` only after the user explicitly agrees to L3 capture.
 
@@ -198,11 +203,10 @@ Create `~/Library/LaunchAgents/ai.opencontext.collector.mac.plist`:
   <string>ai.opencontext.collector.mac</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/bash</string>
-    <string>__COLLECTOR_DIR__/run.sh</string>
+    <string>__HOME__/.opencontext/bin/opencontext-mac-collector</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>__COLLECTOR_DIR__</string>
+  <string>__HOME__</string>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
@@ -217,7 +221,6 @@ Create `~/Library/LaunchAgents/ai.opencontext.collector.mac.plist`:
 
 Replace:
 
-- `__COLLECTOR_DIR__` with `~/.opencontext/collectors/opencontext/collectors/mac` expanded to an absolute path.
 - `__HOME__` with the user's home directory.
 
 Then load it:

@@ -10,6 +10,7 @@ Emits:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 import threading
 import time
 from queue import Queue
@@ -47,18 +48,52 @@ _NOISE_BUNDLE_FRAGMENTS = (
 
 # Apps that typically run in background and are not user-initiated
 _NOISE_APP_NAMES = {
+    "AddressBookManager",
+    "AddressBookSourceSync",
+    "AssetCacheTether",
+    "AssetMetricsExtension",
+    "AXVisualSupportAgent",
+    "BackgroundShortcutRunner",
+    "CacheDeleteExtension",
+    "ClassroomSettings",
     "Spotlight",
     "Notification Center",
     "Control Center",
+    "ContainerMetadataExtractor",
     "loginwindow",
     "Dock",
+    "FamilySettings",
+    "IMDPersistenceAgent",
+    "LocalAuthenticationRemoteService",
+    "MailCacheDelete",
+    "ManagedClient",
+    "MessagesBlastDoorService",
+    "MusicCacheExtension",
+    "PlugInLibraryService",
+    "QuickLookUIService",
+    "SecurityPrivacyExtension",
+    "SetStoreUpdateService",
     "SystemUIServer",
+    "TVCacheExtension",
+    "TrialArchivingService",
+    "TrustedPeersHelper",
     "WindowServer",
     "UserEventAgent",
+    "authorizationhost",
+    "authorizationhos",
     "coreautha",
     "cfprefsd",
     "distnoted",
+    "extensionkitservice",
+    "systemsettingsagent",
+    "writeconfig",
 }
+
+_APP_ROOT_PREFIXES = (
+    "/Applications/",
+    "/System/Applications/",
+    str(Path.home() / "Applications") + "/",
+)
 
 
 class ProcessMonitor:
@@ -132,10 +167,14 @@ class ProcessMonitor:
             exe = proc.exe()
         except (psutil.AccessDenied, psutil.NoSuchProcess):
             return
-        # macOS GUI apps live under /Applications or ~/Applications
-        if not exe or ("/Applications/" not in exe and "/Contents/MacOS/" not in exe):
+        app_path = _extract_app_path(exe)
+        if not app_path:
             return
-        self._on_launch({"app": name, "bundle_id": "", "pid": proc.pid})
+        if not any(app_path.startswith(prefix) for prefix in _APP_ROOT_PREFIXES):
+            return
+        if _is_noise_app_path(app_path):
+            return
+        self._on_launch({"app": name, "bundle_id": "", "pid": proc.pid, "app_path": app_path})
 
     def _on_launch(self, app_info: dict) -> None:
         app_name: str = app_info.get("app", "")
@@ -154,6 +193,8 @@ class ProcessMonitor:
         if bundle_id:
             labels["bundle_id"] = bundle_id
             payload["bundle_id"] = bundle_id
+        if app_path := app_info.get("app_path"):
+            payload["app_path"] = app_path
 
         self.queue.put(make_event(
             source="os",
@@ -194,9 +235,34 @@ def _pm_obs_handle(self, notification) -> None:
             "app": app.localizedName() or "",
             "bundle_id": app.bundleIdentifier() or "",
             "pid": app.processIdentifier(),
+            "app_path": str(app.bundleURL().path()) if app.bundleURL() else "",
         }
         cb = getattr(self, "_pm_callback", None)
         if cb:
             cb(info)
     except Exception as e:
         logger.debug("launch observer error: %s", e)
+
+
+def _extract_app_path(exe: str) -> str:
+    marker = ".app/Contents/MacOS/"
+    idx = exe.find(marker)
+    if idx < 0:
+        return ""
+    return exe[:idx + len(".app")]
+
+
+def _is_noise_app_path(app_path: str) -> bool:
+    lower = app_path.lower()
+    noise_fragments = (
+        ".appex/",
+        "/library/coreservices/",
+        "/system/library/",
+        "/privateframeworks/",
+        "/frameworks/",
+        "/plugins/",
+        "/xpcservices/",
+        "/helpers/",
+        " helper.app",
+    )
+    return any(fragment in lower for fragment in noise_fragments)

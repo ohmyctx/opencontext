@@ -198,9 +198,10 @@ class ClipboardMonitor(threading.Thread):
         if fg and fg.get("bundle_id"):
             labels["bundle_id"] = fg["bundle_id"]
 
-        # Promote preview text to labels for summary generation
+        # Promote preview text to labels for summary generation.
+        # Keep labels compact; the full preview remains in payload.text.
         if ct == "text" and content.get("text"):
-            labels["text"] = content["text"][:120]
+            labels["text"] = _one_line(content["text"])[:120]
         elif ct == "files" and content.get("files"):
             labels["files"] = content["files"][:3]
 
@@ -249,3 +250,8 @@ def _strip_html(html: str) -> str:
     text = re.sub(r"&gt;", ">", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def _one_line(text: str) -> str:
+    import re
+    return re.sub(r"\s+", " ", text).strip()

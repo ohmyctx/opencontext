@@ -1892,6 +1892,18 @@ func printErrorJSON(err error) error {
 }
 
 func buildEventSummary(e *event.ActivityEvent) string {
+	if e.Source == event.SourceOS && e.Type == event.EventType("clipboard_copy") {
+		if text := valueAsString(e.Payload["text"]); text != "" {
+			return truncateSingleLine("copied: "+text, 80)
+		}
+		if files := valueAsString(e.Payload["files"]); files != "" {
+			return truncateSingleLine("copied files: "+files, 80)
+		}
+		if contentType := valueAsString(e.Payload["content_type"]); contentType != "" {
+			return "copied " + contentType
+		}
+	}
+
 	summary := firstEventString(e,
 		"summary",
 		"message",

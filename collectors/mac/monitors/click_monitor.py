@@ -71,7 +71,7 @@ class ClickMonitor:
         if not check_accessibility_permission():
             logger.warning(
                 "Accessibility permission not granted — click monitoring disabled.\n"
-                "  Fix: System Settings → Privacy & Security → Accessibility → add Terminal/Python"
+                "  Fix: System Settings → Privacy & Security → Accessibility → add OpenContextCollector.app or ~/.opencontext/bin/opencontext-mac-collector"
             )
             return
         self._listener = mouse.Listener(on_click=self._on_click)

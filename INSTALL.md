@@ -33,6 +33,8 @@ The shell and agent hook collectors are bundled in `oc`. The Chrome collector is
 
 The macOS and Windows activity collectors push directly to `oc daemon` in a normal install. Do not ask users to set up JSONL files or bridge scripts; those are local development helpers for unusual WSL2/network setups.
 
+The macOS installer creates `~/Applications/OpenContextCollector.app` and uses it as the primary Accessibility permission target. Ask the user to add that app in System Settings. For background service installs, the installer also creates ~/.opencontext/bin/opencontext-mac-collector as a stable service launcher.
+
 ## Ask The User First
 
 Ask these questions before changing files:

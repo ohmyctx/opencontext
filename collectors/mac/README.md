@@ -26,14 +26,20 @@ Monitors user activity on macOS and pushes structured events to the local OpenCo
 bash install.sh
 ```
 
-This creates a `.venv` and installs all Python dependencies (`pyobjc`, `pynput`, etc.).
-It also attempts to show the macOS Accessibility prompt and opens the matching
-System Settings page.
+This creates a `.venv`, installs all Python dependencies (`pyobjc`, `pynput`, etc.),
+and creates `~/Applications/OpenContextCollector.app` as a stable permission
+target. It also attempts to show the macOS Accessibility prompt and opens the
+matching System Settings page.
 
 ## Permissions
 
-Go to **System Settings → Privacy & Security → Accessibility** and add your terminal
-app (Terminal, iTerm2, Warp, etc.) or the Python executable shown by `install.sh`.
+Go to **System Settings → Privacy & Security → Accessibility** and add:
+
+```text
+~/Applications/OpenContextCollector.app
+```
+
+If the collector runs as a background service, also enable `~/.opencontext/bin/opencontext-mac-collector`. If macOS still lists Python separately, enable the Python executable shown by `install.sh`.
 
 Without this permission, app launch and clipboard monitoring can still work, but
 window titles, browser URLs, UI element names, and text-input capture may be incomplete.
@@ -54,7 +60,7 @@ Run the prompt command from Terminal or iTerm on the Mac. A collector started
 from a headless SSH session may not be able to display the macOS permission
 prompt. If the collector runs via LaunchAgent, grant Accessibility access to
 the terminal app used during setup and, if macOS shows it separately, the
-Python executable that runs `collectors/mac/.venv/bin/python`.
+`~/Applications/OpenContextCollector.app`. For background service installs, also enable `~/.opencontext/bin/opencontext-mac-collector`. If macOS lists Python separately, enable the Python executable shown by `install.sh` too.
 
 Clipboard events are captured through `NSPasteboard` and normally do not require
 Accessibility permission, but they are L3 events. They only appear in generated
@@ -65,6 +71,9 @@ memory when the selected subscription allows `max_sensitivity: 3`.
 ```bash
 # Start collector (pushes to oc daemon at localhost:6060)
 bash run.sh
+
+# Start through the permission-friendly app wrapper
+"$HOME/Applications/OpenContextCollector.app/Contents/MacOS/opencontext-collector"
 
 # Debug mode (verbose logging)
 bash run.sh --debug
