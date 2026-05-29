@@ -10,10 +10,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -67,8 +69,10 @@ func startPruner(ctx context.Context, es store.EventStore, retentionDays int, lo
 }
 
 // startRawDumpScheduler runs the RawDumpRunner for each raw_dump subscription
-// on its configured refresh interval. Runs until ctx is cancelled.
-func startRawDumpScheduler(ctx context.Context, subs []subscription.Subscription, s *store.Store, log *slog.Logger) {
+// on its configured refresh interval. Each subscription gets its own derived
+// context so it can be stopped independently on config reload.
+// Call cancelAll() before starting a new scheduler to stop all running goroutines.
+func startRawDumpScheduler(ctx context.Context, subs []subscription.Subscription, s *store.Store, cancelFns map[string]context.CancelFunc, log *slog.Logger) {
 	runner := compiler.NewRawDumpRunner(s, log)
 
 	for i := range subs {
@@ -77,12 +81,15 @@ func startRawDumpScheduler(ctx context.Context, subs []subscription.Subscription
 			continue
 		}
 
+		subCtx, cancel := context.WithCancel(ctx)
+		cancelFns[sub.Name] = cancel
+
 		interval := sub.EffectiveRefreshInterval()
 		log.Info("raw_dump scheduler started", "subscription", sub.Name, "interval", interval)
 
 		go func(s *subscription.Subscription) {
 			// Run once immediately on startup
-			if err := runner.Run(ctx, s); err != nil {
+			if err := runner.Run(subCtx, s); err != nil {
 				log.Warn("raw dump failed", "subscription", s.Name, "err", err)
 			}
 
@@ -91,14 +98,59 @@ func startRawDumpScheduler(ctx context.Context, subs []subscription.Subscription
 			for {
 				select {
 				case <-ticker.C:
-					if err := runner.Run(ctx, s); err != nil {
+					if err := runner.Run(subCtx, s); err != nil {
 						log.Warn("raw dump failed", "subscription", s.Name, "err", err)
 					}
-				case <-ctx.Done():
+				case <-subCtx.Done():
 					return
 				}
 			}
 		}(sub)
+	}
+}
+
+// watchConfigFile watches configFile for changes and calls onReload with the new config.
+// It stops when ctx is cancelled.
+func watchConfigFile(ctx context.Context, configFile string, onReload func(*subscription.Config), log *slog.Logger) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Warn("config file watcher: create failed", "err", err)
+		return
+	}
+	defer watcher.Close()
+
+	// Watch the directory so we catch rename/create events on the file itself
+	dir := filepath.Dir(configFile)
+	if err := watcher.Add(dir); err != nil {
+		log.Warn("config file watcher: add dir failed", "dir", dir, "err", err)
+		return
+	}
+
+	// Debounce: wait after the first event to coalesce multiple events
+	debounce := time.NewTimer(0)
+	if !debounce.Stop() {
+		<-debounce.C
+	}
+	const debounceDelay = 500 * time.Millisecond
+
+	for {
+		select {
+		case err := <-watcher.Errors:
+			log.Warn("config file watcher error", "err", err)
+		case event := <-watcher.Events:
+			if filepath.Base(event.Name) == filepath.Base(configFile) {
+				debounce.Reset(debounceDelay)
+			}
+		case <-debounce.C:
+			newCfg, err := subscription.ReloadFromPath(configFile)
+			if err != nil {
+				log.Warn("config reload failed", "err", err)
+				continue
+			}
+			onReload(newCfg)
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -166,7 +218,7 @@ func Run(opts Options) error {
 	// RawDumpRunner (for raw_dump subscriptions, zero-config)
 	rawDump := compiler.NewRawDumpRunner(s, log)
 
-	// HTTP router
+	// HTTP router — declare early so config reload can reference it
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
@@ -184,6 +236,35 @@ func Run(opts Options) error {
 	r.Get("/api/v1/schemas", makeSchemasHandler())
 	r.Post("/api/v1/compile", makeCompileHandler(comp, rawDump, cfg.Subscriptions, log))
 
+	// Graceful shutdown — declare ctx before using in goroutines
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Subscription cancel funcs — cancel all on reload to stop old scheduler goroutines
+	subCancelFns := make(map[string]context.CancelFunc)
+	startRawDumpScheduler(ctx, cfg.Subscriptions, s, subCancelFns, log)
+
+	// Start config file watcher for hot reload
+	if cfg.ConfigFile != "" {
+		go watchConfigFile(ctx, cfg.ConfigFile, func(newCfg *subscription.Config) {
+			log.Info("config changed, reloading", "file", newCfg.ConfigFile)
+			// Cancel all running subscription schedulers
+			for name, cancel := range subCancelFns {
+				cancel()
+				delete(subCancelFns, name)
+				log.Info("stopped subscription scheduler", "subscription", name)
+			}
+			// Rebuild compiler with new subscriptions
+			if err := comp.BuildFromConfig(newCfg.Subscriptions); err != nil {
+				log.Error("build compiler from new config", "err", err)
+				return
+			}
+			// Restart raw dump schedulers with new subscriptions
+			startRawDumpScheduler(ctx, newCfg.Subscriptions, s, subCancelFns, log)
+			log.Info("config reload complete")
+		}, log)
+	}
+
 	srv := &http.Server{
 		Addr:         cfg.ListenAddr,
 		Handler:      r,
@@ -192,12 +273,6 @@ func Run(opts Options) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Graceful shutdown
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	// Start raw_dump scheduler and event pruner after ctx is ready.
-	startRawDumpScheduler(ctx, cfg.Subscriptions, s, log)
 	go startPruner(ctx, evStore, cfg.RetentionDays, log)
 
 	go func() {

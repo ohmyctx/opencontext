@@ -107,6 +107,7 @@ func (s *Subscription) LLMSummarizerConfig() *summarizer.LLMConfig {
 
 // Config is the root configuration structure for the OpenContext daemon.
 type Config struct {
+	ConfigFile     string                 `mapstructure:"config_file"` // path to the loaded config file (for watching)
 	DataDir        string                 `mapstructure:"data_dir"`
 	ListenAddr     string                 `mapstructure:"listen_addr"`
 	LogLevel       string                 `mapstructure:"log_level"`
@@ -168,6 +169,9 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
+	// Record the loaded config file path so the daemon can watch it
+	cfg.ConfigFile = v.ConfigFileUsed()
+
 	// Expand ~ in paths
 	cfg.DataDir = expandHome(cfg.DataDir)
 	for i := range cfg.Subscriptions {
@@ -180,6 +184,15 @@ func Load(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// Reload re-reads the config from the given file path.
+// Returns nil if path is empty.
+func ReloadFromPath(path string) (*Config, error) {
+	if path == "" {
+		return nil, nil
+	}
+	return Load(path)
 }
 
 func expandHome(path string) string {
