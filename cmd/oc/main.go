@@ -713,6 +713,7 @@ is intended for generated hook scripts; users usually only run install.`,
 	}
 	shell.AddCommand(buildShellPushCmd())
 	shell.AddCommand(buildShellInstallCmd())
+	shell.AddCommand(buildShellUninstallCmd())
 	return shell
 }
 
@@ -817,6 +818,20 @@ Sensitivity levels:
 	return cmd
 }
 
+func buildShellUninstallCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove shell hooks from zsh, bash, and PowerShell",
+		Long: `Uninstall removes OpenContext shell hooks from shell configuration files
+(.zshrc, .bashrc, PowerShell profiles) and deletes the hooks directory.`,
+		Example: `  oc collector shell uninstall`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installers.UninstallShell()
+		},
+	}
+	return cmd
+}
+
 // ── claude collector ──────────────────────────────────────────────────────────
 
 func buildClaudeCollectorCmd() *cobra.Command {
@@ -829,6 +844,7 @@ posted to the OpenContext daemon.`,
   oc collector claude install --daemon http://127.0.0.1:6060`,
 	}
 	claude.AddCommand(buildClaudeInstallCmd())
+	claude.AddCommand(buildClaudeUninstallCmd())
 	return claude
 }
 
@@ -849,6 +865,20 @@ Claude Code will POST each user message to the OpenContext daemon for recording.
 	return cmd
 }
 
+func buildClaudeUninstallCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove OpenContext HTTP hooks from Claude Code settings",
+		Long: `Removes UserPromptSubmit and SessionStart HTTP hook entries from
+~/.claude/settings.json that point to the OpenContext daemon.`,
+		Example: `  oc collector claude uninstall`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installers.UninstallClaude()
+		},
+	}
+	return cmd
+}
+
 // ── Codex CLI collector ───────────────────────────────────────────────────────
 
 func buildCodexCollectorCmd() *cobra.Command {
@@ -861,6 +891,7 @@ posted to the OpenContext daemon.`,
   oc collector codex install --daemon http://127.0.0.1:6060`,
 	}
 	codex.AddCommand(buildCodexInstallCmd())
+	codex.AddCommand(buildCodexUninstallCmd())
 	return codex
 }
 
@@ -882,6 +913,19 @@ Requires Codex CLI with hooks support (codex >= 0.1.x).`,
 	return cmd
 }
 
+func buildCodexUninstallCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove OpenContext hooks from Codex CLI",
+		Long: `Removes hook script files and hook entries from ~/.codex/hooks.json.`,
+		Example: `  oc collector codex uninstall`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installers.UninstallCodex()
+		},
+	}
+	return cmd
+}
+
 // ── Cursor IDE collector ──────────────────────────────────────────────────────
 
 func buildCursorCollectorCmd() *cobra.Command {
@@ -894,6 +938,7 @@ starts are posted to the OpenContext daemon.`,
   oc collector cursor install --daemon http://127.0.0.1:6060`,
 	}
 	cursor.AddCommand(buildCursorInstallCmd())
+	cursor.AddCommand(buildCursorUninstallCmd())
 	return cursor
 }
 
@@ -915,6 +960,19 @@ Requires Cursor IDE with hooks support (Cursor >= 1.0).`,
 	return cmd
 }
 
+func buildCursorUninstallCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove OpenContext hooks from Cursor IDE",
+		Long: `Removes hook script files and hook entries from ~/.cursor/hooks.json.`,
+		Example: `  oc collector cursor uninstall`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installers.UninstallCursor()
+		},
+	}
+	return cmd
+}
+
 // ── OpenCode collector ────────────────────────────────────────────────────────
 
 func buildOpenCodeCollectorCmd() *cobra.Command {
@@ -927,6 +985,7 @@ posted to the OpenContext daemon.`,
   oc collector opencode install --daemon http://127.0.0.1:6060`,
 	}
 	opencode.AddCommand(buildOpenCodeInstallCmd())
+	opencode.AddCommand(buildOpenCodeUninstallCmd())
 	return opencode
 }
 
@@ -946,6 +1005,19 @@ format (via opencode-claude-hooks npm package).`,
 		},
 	}
 	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	return cmd
+}
+
+func buildOpenCodeUninstallCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove OpenContext hooks from OpenCode",
+		Long: `Removes hook script files and hook entries from ~/.config/opencode/hooks.json.`,
+		Example: `  oc collector opencode uninstall`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installers.UninstallOpenCode()
+		},
+	}
 	return cmd
 }
 

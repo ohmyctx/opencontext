@@ -462,3 +462,260 @@ func appendPwshProfile(home, hooksDir string) {
 		f.Close()
 	}
 }
+
+// ── Uninstall functions ───────────────────────────────────────────────────────
+
+// UninstallShell removes shell hooks from zsh, bash, and PowerShell profiles.
+func UninstallShell() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	hooksDir := filepath.Join(home, ".opencontext", "collectors", "shell")
+
+	// Remove sourcing from shell rc files
+	removeFromFile(filepath.Join(home, ".zshrc"), "hooks.zsh")
+	removeFromFile(filepath.Join(home, ".bashrc"), "hooks.bash")
+
+	// Remove from PowerShell profiles
+	pwshProfiles := []string{
+		filepath.Join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+		filepath.Join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
+	}
+	for _, p := range pwshProfiles {
+		removeFromFile(p, "hooks.ps1")
+	}
+
+	// Remove hooks directory
+	os.RemoveAll(hooksDir)
+
+	fmt.Println("Shell hooks uninstalled.")
+	return nil
+}
+
+// UninstallClaude removes Claude Code HTTP hooks from ~/.claude/settings.json.
+func UninstallClaude() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	if err := removeHTTPHookEntries(settingsPath, "claude"); err != nil {
+		return err
+	}
+	fmt.Println("Claude Code hooks uninstalled.")
+	return nil
+}
+
+// UninstallCodex removes Codex CLI hooks.
+func UninstallCodex() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	hooksDir := filepath.Join(home, ".opencontext", "collectors", "hooks")
+	os.RemoveAll(hooksDir)
+
+	codexHooksPath := filepath.Join(home, ".codex", "hooks.json")
+	removeCommandHookEntries(codexHooksPath, "oc-")
+
+	fmt.Println("Codex CLI hooks uninstalled.")
+	return nil
+}
+
+// UninstallCursor removes Cursor IDE hooks.
+func UninstallCursor() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	cursorHooksDir := filepath.Join(home, ".cursor", "hooks")
+	os.RemoveAll(cursorHooksDir)
+
+	cursorCfgPath := filepath.Join(home, ".cursor", "hooks.json")
+	removeCursorHookEntries(cursorCfgPath)
+
+	fmt.Println("Cursor IDE hooks uninstalled.")
+	return nil
+}
+
+// UninstallOpenCode removes OpenCode hooks.
+func UninstallOpenCode() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	hooksDir := filepath.Join(home, ".opencontext", "collectors", "hooks")
+	os.RemoveAll(hooksDir)
+
+	opencodeCfgPath := filepath.Join(home, ".config", "opencode", "hooks.json")
+	removeCommandHookEntries(opencodeCfgPath, "oc-")
+
+	fmt.Println("OpenCode hooks uninstalled.")
+	return nil
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+// removeFromFile removes lines containing marker from file.
+func removeFromFile(path, marker string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	lines := strings.Split(string(data), "\n")
+	var kept []string
+	for _, line := range lines {
+		if !strings.Contains(line, marker) {
+			kept = append(kept, line)
+		}
+	}
+	os.WriteFile(path, []byte(strings.Join(kept, "\n")), 0o644)
+}
+
+// removeHTTPHookEntries removes OpenContext HTTP hook entries from a JSON config file.
+func removeHTTPHookEntries(cfgPath, endpointPrefix string) error {
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return nil // file doesn't exist = nothing to remove
+	}
+
+	topLevel := map[string]json.RawMessage{}
+	if err := json.Unmarshal(data, &topLevel); err != nil {
+		return fmt.Errorf("decode %s: %w", cfgPath, err)
+	}
+
+	hooksMap := map[string]json.RawMessage{}
+	if raw, ok := topLevel["hooks"]; ok {
+		_ = json.Unmarshal(raw, &hooksMap)
+	}
+
+	for _, eventName := range []string{"UserPromptSubmit", "SessionStart"} {
+		raw, ok := hooksMap[eventName]
+		if !ok {
+			continue
+		}
+		var items []map[string]any
+		if err := json.Unmarshal(raw, &items); err != nil {
+			continue
+		}
+		var filtered []map[string]any
+		for _, item := range items {
+			if url, ok := item["url"].(string); ok && strings.Contains(url, endpointPrefix) {
+				continue // remove opencontext entries
+			}
+			filtered = append(filtered, item)
+		}
+		if len(filtered) == 0 {
+			delete(hooksMap, eventName)
+		} else {
+			out, _ := json.Marshal(filtered)
+			hooksMap[eventName] = out
+		}
+	}
+
+	if len(hooksMap) == 0 {
+		delete(topLevel, "hooks")
+	} else {
+		hooksRaw, _ := json.Marshal(hooksMap)
+		topLevel["hooks"] = hooksRaw
+	}
+
+	out, _ := json.MarshalIndent(topLevel, "", "  ")
+	return os.WriteFile(cfgPath, out, 0o644)
+}
+
+// removeCommandHookEntries removes hook entries whose command contains the marker from a JSON config.
+func removeCommandHookEntries(cfgPath, marker string) error {
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return nil
+	}
+
+	existing := map[string]json.RawMessage{}
+	if err := json.Unmarshal(data, &existing); err != nil {
+		return nil
+	}
+
+	for _, eventName := range []string{"UserPromptSubmit", "SessionStart"} {
+		raw, ok := existing[eventName]
+		if !ok {
+			continue
+		}
+		var items []map[string]any
+		if err := json.Unmarshal(raw, &items); err != nil {
+			continue
+		}
+		var filtered []map[string]any
+		for _, item := range items {
+			if cmd, ok := item["command"].(string); ok && strings.Contains(cmd, marker) {
+				continue // remove oc- entries
+			}
+			filtered = append(filtered, item)
+		}
+		if len(filtered) == 0 {
+			delete(existing, eventName)
+		} else {
+			out, _ := json.Marshal(filtered)
+			existing[eventName] = out
+		}
+	}
+
+	if len(existing) == 0 {
+		return os.Remove(cfgPath)
+	}
+	out, _ := json.MarshalIndent(existing, "", "  ")
+	return os.WriteFile(cfgPath, out, 0o644)
+}
+
+// removeCursorHookEntries removes oc-capture entries from ~/.cursor/hooks.json.
+func removeCursorHookEntries(cfgPath string) error {
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return nil
+	}
+
+	topLevel := map[string]json.RawMessage{}
+	if err := json.Unmarshal(data, &topLevel); err != nil {
+		return nil
+	}
+
+	hooksMap := map[string]json.RawMessage{}
+	if raw, ok := topLevel["hooks"]; ok {
+		_ = json.Unmarshal(raw, &hooksMap)
+	}
+
+	for _, key := range []string{"beforeSubmitPrompt", "sessionStart"} {
+		raw, ok := hooksMap[key]
+		if !ok {
+			continue
+		}
+		var items []map[string]any
+		if err := json.Unmarshal(raw, &items); err != nil {
+			continue
+		}
+		var filtered []map[string]any
+		for _, item := range items {
+			if cmd, ok := item["command"].(string); ok && strings.Contains(cmd, "oc-capture") {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		if len(filtered) == 0 {
+			delete(hooksMap, key)
+		} else {
+			out, _ := json.Marshal(filtered)
+			hooksMap[key] = out
+		}
+	}
+
+	if len(hooksMap) == 0 {
+		delete(topLevel, "hooks")
+	} else {
+		hooksRaw, _ := json.Marshal(hooksMap)
+		topLevel["hooks"] = hooksRaw
+	}
+
+	out, _ := json.MarshalIndent(topLevel, "", "  ")
+	return os.WriteFile(cfgPath, out, 0o644)
+}
