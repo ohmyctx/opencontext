@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-05-29
+
+### Added
+- **PowerShell Shell Hooks**: Full Windows PowerShell support for shell command capture
+  - PowerShell 5.1/7+ compatible `prompt()` override using `Get-History` API
+  - Saves original prompt ScriptBlock before override to avoid recursion
+  - Supports PS7+ `Duration`/`WorkingDirectory` with PS5.1 fallback
+  - Installs to both PowerShell Core and Windows PowerShell profiles
+- **Hot Config Reload**: Config file changes detected automatically via fsnotify
+  - 500ms debounce to coalesce rapid file changes
+  - Cancels old subscription schedulers, rebuilds compiler, restarts schedulers
+  - No daemon restart needed
+- **Collector Uninstall**: `oc collector <name> uninstall` for all hook types
+  - `shell`, `claude`, `codex`, `cursor`, `opencode` all have uninstall commands
+  - Idempotent: safe to run multiple times, only removes OpenContext entries
+
+### Changed
+- **`projects` filter replaced with `label_selectors`**: Generic label-based filtering
+  - `Filter.Projects []string` removed, `Filter.LabelSelectors map[string]string` added
+  - More flexible: filter by any label key=value pair
+  - Project label still works via `label_selectors.project`
+- **Default `refresh_interval`**: Changed from 1800s (30min) to 300s (5min)
+- **Removed unused `platform` column**: `oc events` table output no longer shows empty platform field
+
+### Changed (Internal)
+- PowerShell hook: simplified `shellHookPwsh` with `strings.Builder` removal
+- `appendPwshProfile`: now writes to both PowerShell 7+ and PowerShell 5.1 profile paths
+
 ## [0.1.0] - 2026-05-29
 
 ### Added
@@ -34,5 +62,6 @@ All notable changes to this project will be documented in this file.
 ### Contributors
 - @ohmyctx - all contributions
 
-[unreleased]: https://github.com/ohmyctx/opencontext/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/ohmyctx/opencontext/compare/v0.2.0...HEAD
+[v0.2.0]: https://github.com/ohmyctx/opencontext/releases/tag/v0.2.0
 [v0.1.0]: https://github.com/ohmyctx/opencontext/releases/tag/v0.1.0

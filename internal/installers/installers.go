@@ -426,11 +426,17 @@ function global:prompt {
                   $null -ne $lastCmd.StartExecutionTime) {
             [Math]::Max(0, ($lastCmd.EndExecutionTime - $lastCmd.StartExecutionTime).TotalMilliseconds)
         } else { 0 }
-        # PS7+ exposes WorkingDirectory; fall back to current location
-        $cwd = if ($lastCmd.PSObject.Properties['WorkingDirectory'] -and $lastCmd.WorkingDirectory) {
-            $lastCmd.WorkingDirectory
-        } else { $PWD.Path }
-        & $ocBin collector shell push --command "$cmd" --exit-code $exit --duration-ms $([long]$dur) --cwd $cwd --sensitivity $sensitivity 2>$null | Out-Null
+        # Fire-and-forget: avoids blocking the prompt on Defender scans or a slow daemon.
+        # Use string concatenation to build Arguments — avoids PS backtick escaping in the hook source.
+        $escapedCmd = $cmd -replace '"', '\"'
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName        = $ocBin
+        $psi.Arguments       = 'collector shell push --command "' + $escapedCmd + '" --exit-code ' + $exit + ' --duration-ms ' + [long]$dur + ' --sensitivity ' + $sensitivity
+        $psi.UseShellExecute        = $false
+        $psi.CreateNoWindow         = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError  = $true
+        $null = [System.Diagnostics.Process]::Start($psi)
     }
 
     & $script:_oc_orig_prompt
@@ -439,7 +445,7 @@ function global:prompt {
 }
 
 func appendPwshProfile(home, hooksDir string) {
-	hookLine := fmt.Sprintf("\n# OpenContext shell collector\n. %s\n", filepath.Join(hooksDir, "hooks.ps1"))
+	hookLine := fmt.Sprintf("\n# OpenContext shell collector\n. \"%s\"\n", filepath.Join(hooksDir, "hooks.ps1"))
 	// Write to both PowerShell 7+ (pwsh) and PowerShell 5.1 (powershell.exe) profiles.
 	profiles := []string{
 		filepath.Join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
