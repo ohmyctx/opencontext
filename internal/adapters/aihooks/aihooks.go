@@ -313,17 +313,37 @@ func buildOpenCodeSessionStartEvent(sessionID, cwd string) *event.ActivityEvent 
 
 // ── Hermes Agent ─────────────────────────────────────────────────────────────
 
-// hermesHookInput is the JSON body sent by the Hermes handler.py hook.
-// handler.py serialises the context dict plus event_type from the gateway.
-// Relevant events:
-//   - agent:start  → platform, user_id, session_id, message
-//   - session:start → platform, user_id, session_id, session_key
+// hermesHookInput handles two wire formats:
+//
+//  1. Gateway hook (handler.py): event_type + context fields flattened
+//     {"event_type":"agent:start","platform":"telegram","user_id":"123","session_id":"s","message":"hi"}
+//
+//  2. Shell hook (oc-hook.sh via stdin): hook_event_name + standard fields
+//     {"hook_event_name":"pre_llm_call","session_id":"s","cwd":"/...",
+//      "extra":{"user_message":"hi","platform":"cli","model":"gpt-4o",...}}
 type hermesHookInput struct {
+	// Gateway hook fields
 	EventType string `json:"event_type"`
 	Platform  string `json:"platform"`
 	UserID    string `json:"user_id"`
 	SessionID string `json:"session_id"`
 	Message   string `json:"message"`
+
+	// Shell hook top-level fields
+	HookEventName string                 `json:"hook_event_name"`
+	Extra         map[string]interface{} `json:"extra"`
+}
+
+func hermesExtraStr(extra map[string]interface{}, key string) string {
+	if extra == nil {
+		return ""
+	}
+	if v, ok := extra[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 func (a *Adapter) handleHermesHook(w http.ResponseWriter, r *http.Request) {
@@ -331,6 +351,33 @@ func (a *Adapter) handleHermesHook(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
+	}
+
+	// Normalise shell hook format to gateway hook format for unified handling.
+	// Shell hook payload puts event-specific kwargs in the "extra" dict.
+	if input.HookEventName != "" && input.EventType == "" {
+		switch input.HookEventName {
+		case "pre_llm_call":
+			input.EventType = "agent:start"
+			if input.Message == "" {
+				// user_message is in extra, not at top level
+				input.Message = hermesExtraStr(input.Extra, "user_message")
+			}
+			if input.Platform == "" {
+				input.Platform = hermesExtraStr(input.Extra, "platform")
+			}
+			if input.UserID == "" {
+				input.UserID = hermesExtraStr(input.Extra, "sender_id")
+			}
+		case "on_session_start":
+			input.EventType = "session:start"
+			if input.Platform == "" {
+				input.Platform = hermesExtraStr(input.Extra, "platform")
+			}
+		default:
+			writeJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
+			return
+		}
 	}
 
 	var e *event.ActivityEvent
@@ -401,9 +448,10 @@ func buildHermesSessionStartEvent(input hermesHookInput) *event.ActivityEvent {
 // ── OpenClaw ──────────────────────────────────────────────────────────────────
 
 // openClawHookInput is the JSON body sent by the OpenClaw internal hook handler.js.
-// The handler serialises the InternalHookEvent fields:
-//   - message_received: type="message", action="received", context={from, content, senderId, sessionKey, channelId}
-//   - session_start:    type="session", action="start",    context={sessionKey, channelId}
+// Three event types are forwarded:
+//   - message_received: type="message", action="received" — gateway channel messages
+//   - before_agent_run: type="agent",   action=*          — local TUI + gateway agent turns
+//   - session_start:    type="session", action="start"    — new session
 type openClawHookInput struct {
 	Type       string                 `json:"type"`
 	Action     string                 `json:"action"`
@@ -421,6 +469,9 @@ func (a *Adapter) handleOpenClawHook(w http.ResponseWriter, r *http.Request) {
 	var e *event.ActivityEvent
 	switch {
 	case input.Type == "message" && input.Action == "received":
+		e = buildOpenClawMessageEvent(input)
+	case input.Type == "agent":
+		// before_agent_run fires in both local TUI and gateway; context.content holds the prompt.
 		e = buildOpenClawMessageEvent(input)
 	case input.Type == "session" && input.Action == "start":
 		e = buildOpenClawSessionStartEvent(input)
@@ -442,7 +493,11 @@ func openClawStr(m map[string]interface{}, key string) string {
 }
 
 func buildOpenClawMessageEvent(input openClawHookInput) *event.ActivityEvent {
+	// "content" is the canonical field; "prompt" is the before_agent_run fallback.
 	msg := strings.TrimSpace(openClawStr(input.Context, "content"))
+	if msg == "" {
+		msg = strings.TrimSpace(openClawStr(input.Context, "prompt"))
+	}
 	if len([]rune(msg)) < 5 {
 		return nil
 	}

@@ -25,6 +25,8 @@ Recommended default: install only the collectors for tools the user actually use
 | Codex | `oc collector codex install` | user uses Codex CLI |
 | Cursor | `oc collector cursor install` | user uses Cursor hooks |
 | OpenCode | `oc collector opencode install` | user uses OpenCode |
+| Hermes | `oc collector hermes install` | user uses Hermes Agent (CLI or gateway) |
+| OpenClaw | `oc collector openclaw install` | user uses OpenClaw (TUI or gateway) |
 | Chrome browser | `oc collector browser-chrome install` | user uses Chrome and wants browser page/search/form/action activity |
 | macOS activity | read `docs/COLLECTOR_INSTALL.md` | user wants app/window/click/text activity on macOS |
 | Windows activity | read `docs/COLLECTOR_INSTALL.md` | user wants app/window/click/text activity on Windows |
@@ -48,7 +50,7 @@ For the full collector configuration policy, read `docs/COLLECTOR_CONFIG.md`.
 Ask these questions before changing files:
 
 1. Which activity sources should OpenContext collect?
-   Suggested choices: shell, Claude Code, Codex, Cursor, OpenCode, Chrome browser, macOS activity, Windows activity.
+   Suggested choices: shell, Claude Code, Codex, Cursor, OpenCode, Hermes, OpenClaw, Chrome browser, macOS activity, Windows activity.
 
 2. Where should OpenContext memory be connected?
    Suggested choices: Claude Code, Cursor or other project agents via a project memory file, Hermes, OpenClaw, standalone `~/.opencontext/memory.md`.
@@ -192,6 +194,86 @@ oc collector opencode install
 
 **For Windows users:** The shell collector installs PowerShell hooks automatically (no bash/zsh on Windows). PowerShell 5.1+ is required. After install, open a new PowerShell window — the hook loads via the profile and commands will be captured.
 
+### Hermes Agent
+
+```bash
+oc collector hermes install
+```
+
+This installs two complementary hooks so both CLI and gateway modes are captured:
+
+- **Shell hook** (`~/.opencontext/collectors/hermes-hooks/oc-hook.sh`): registered in `~/.hermes/config.yaml` under `hooks.pre_llm_call` and `hooks.on_session_start`. Fires on every user turn and new session in **both** `hermes chat` (CLI) and `hermes gateway` modes.
+- **Gateway hook** (`~/.hermes/hooks/opencontext/`): fires on `agent:start` and `session:start` events in **gateway mode only** (Telegram, Discord, etc.).
+
+After install, restart Hermes for the hooks to take effect:
+
+```bash
+# CLI mode:
+hermes chat
+
+# Gateway mode:
+hermes gateway
+```
+
+Verify that events arrive:
+
+```bash
+oc events --source hermes --since 10m --format json
+```
+
+If no events appear after sending a message, check that `hooks_auto_accept: true` is present in `~/.hermes/config.yaml` (the installer adds it automatically).
+
+### OpenClaw
+
+```bash
+oc collector openclaw install
+```
+
+This installs two capture methods so both TUI (local mode) and gateway mode are covered:
+
+**Method 1 — Internal hook** (for gateway channel messages and gateway-mode sessions):
+
+The hook is placed in `~/.opencontext/collectors/openclaw-hooks/opencontext/` and registered in OpenClaw's config automatically. Restart OpenClaw after install:
+
+```bash
+openclaw          # TUI — restart the existing window
+openclaw gateway  # or restart the gateway process
+```
+
+Verify the hook is loaded:
+
+```bash
+openclaw hooks list
+# should show "opencontext" with status "✓ ready"
+```
+
+**Method 2 — Trajectory watcher** (reliable fallback; always works for TUI):
+
+OpenClaw writes every user turn to `~/.openclaw/agents/*/sessions/*.trajectory.jsonl`. Start the watcher in the background:
+
+```bash
+python3 ~/.opencontext/collectors/openclaw-watcher/watch.py &
+```
+
+The watcher starts from the current file position (skips history) and forwards new `prompt.submitted` entries to the daemon in real time.
+
+> **Recommendation:** run both. The internal hook fires for gateway channel events; the trajectory watcher covers local TUI sessions where the internal hook may not fire.
+
+Add the watcher to your shell profile or init script so it starts automatically:
+
+```bash
+# Add to ~/.zshrc or ~/.bashrc
+python3 ~/.opencontext/collectors/openclaw-watcher/watch.py &>/dev/null &
+
+# Or run under a process supervisor for reliability
+```
+
+Verify events arrive after sending a message in OpenClaw:
+
+```bash
+oc events --source openclaw --since 10m --format json
+```
+
 If the user selected Chrome browser and has Chrome installed, prepare the unpacked extension:
 
 ```bash
@@ -271,7 +353,7 @@ Use this when the user wants one memory file across all work:
 subscriptions:
   - name: "global"
     filter:
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      sources: ["shell", "claude", "codex", "cursor", "opencode", "hermes", "openclaw"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -284,6 +366,7 @@ subscriptions:
 
 Remove any sources the user did not choose.
 If the user selected Chrome browser, include `"browser"` in `sources`.
+Include `"hermes"` only if the user installed the Hermes collector; include `"openclaw"` only if the user installed the OpenClaw collector.
 
 ### Project Subscription (Label-Based)
 
@@ -308,7 +391,11 @@ Replace:
 - `<project-name>` with the project label value OpenContext records on events.
 - `<absolute-project-path>` with the actual project directory.
 - the source list with the user's selected collectors.
-If the user selected Chrome browser, include `"browser"` in `sources`.
+
+Include only the sources whose collectors are installed:
+- `"browser"` — if Chrome collector is installed
+- `"hermes"` — if Hermes collector is installed
+- `"openclaw"` — if OpenClaw collector is installed
 
 ## Connect Memory To Agents
 
@@ -435,6 +522,8 @@ subscriptions:
 
 ### Hermes
 
+Hermes reads memory from `~/.hermes/memories/MEMORY.md` (global memory file that persists across sessions). Configure OpenContext to inject into it:
+
 ```yaml
 memory:
   backend: "raw_dump"
@@ -444,9 +533,30 @@ memory:
       header: "## OpenContext Recent Activity"
 ```
 
+> **Note:** This is separate from the Hermes *collector*. The collector captures what the user says to Hermes; this inject target makes OpenContext memory visible *to* Hermes.
+
+To capture activity **from** Hermes and also surface OpenContext memory **to** Hermes, combine both:
+
+```yaml
+subscriptions:
+  - name: "global"
+    filter:
+      sources: ["shell", "claude", "hermes", "openclaw"]
+      max_sensitivity: 2
+    memory:
+      backend: "raw_dump"
+      path: "~/.opencontext/memory.md"
+      inject_targets:
+        - path: "~/.hermes/memories/MEMORY.md"
+          header: "## OpenContext Recent Activity"
+    refresh_interval: 300
+```
+
 ---
 
 ### OpenClaw
+
+OpenClaw reads workspace memory files from its workspace directory. Configure OpenContext to inject into it:
 
 ```yaml
 memory:
@@ -455,6 +565,30 @@ memory:
   inject_targets:
     - path: "~/.openclaw/workspace/MEMORY.md"
       header: "## OpenContext Recent Activity"
+```
+
+> **Note:** This is separate from the OpenClaw *collector*. The collector captures what the user says to OpenClaw; this inject target makes OpenContext memory visible *to* OpenClaw.
+
+To capture activity **from** OpenClaw and also surface OpenContext memory **to** OpenClaw, combine both — and remember to start the trajectory watcher:
+
+```yaml
+subscriptions:
+  - name: "global"
+    filter:
+      sources: ["shell", "claude", "hermes", "openclaw"]
+      max_sensitivity: 2
+    memory:
+      backend: "raw_dump"
+      path: "~/.opencontext/memory.md"
+      inject_targets:
+        - path: "~/.openclaw/workspace/MEMORY.md"
+          header: "## OpenContext Recent Activity"
+    refresh_interval: 300
+```
+
+```bash
+# Start the OpenClaw trajectory watcher (keep running in background)
+python3 ~/.opencontext/collectors/openclaw-watcher/watch.py &
 ```
 
 ---
@@ -519,3 +653,37 @@ Report these results to the user:
 6. Subscription names created.
 7. Memory file paths created.
 8. Agent files updated or inject targets installed.
+
+### Hermes-specific checks
+
+If Hermes was installed:
+
+```bash
+# Confirm hooks are present in config
+grep -A6 "^hooks:" ~/.hermes/config.yaml
+grep "hooks_auto_accept" ~/.hermes/config.yaml
+
+# After sending one message in hermes chat:
+oc events --source hermes --since 5m --format json
+```
+
+Expected: at least one `user_message` event with `source: "hermes"`.
+
+### OpenClaw-specific checks
+
+If OpenClaw was installed:
+
+```bash
+# Confirm internal hook is registered
+openclaw hooks list   # should show "opencontext" ✓ ready
+
+# Confirm trajectory watcher is running
+pgrep -f "openclaw-watcher/watch.py" && echo "watcher running"
+
+# After sending one message in openclaw TUI:
+oc events --source openclaw --since 5m --format json
+```
+
+Expected: at least one `user_message` event with `source: "openclaw"`.
+
+If the internal hook is loaded but no events appear, confirm the trajectory watcher is running — it is the reliable capture path for local TUI sessions.
