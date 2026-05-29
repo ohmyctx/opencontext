@@ -9,8 +9,30 @@ Install one command, `oc`, then configure:
 1. which collectors should capture activity;
 2. which memory subscriptions should be generated;
 3. which agent files should read or receive that memory.
+4. whether the user prefers on-demand access through the OpenContext skill instead of automatic memory injection.
 
 OpenContext is local-first. The daemon listens on `http://localhost:6060` and stores data in `~/.opencontext/`.
+
+## Optional Agent Skill
+
+OpenContext includes an optional agent skill at:
+
+```text
+skills/opencontext/SKILL.md
+```
+
+Recommend installing this skill when the user wants agents to query recent OpenContext events only when needed, without automatically injecting memory into system prompts, global instructions, or project files.
+
+Use the skill mode when:
+
+- the user says they do not want prompt or project-file modifications;
+- the user wants local context only for the current task;
+- the environment is sensitive, shared, or experimental;
+- the agent should ask before reading L3 data such as screenshots, clipboard content, raw keystrokes, or full chat text.
+
+Subscription injection and skill mode can coexist. If the user wants the least invasive setup, install `oc`, start the daemon, install only the selected collectors, and install the OpenContext skill instead of configuring memory subscriptions.
+
+If the current agent supports local skill installation, install or copy `skills/opencontext` into that agent's skill directory using the agent's normal skill installation workflow. Do not assume the target path; ask or inspect the agent's skill mechanism.
 
 ## Collector Packaging
 
@@ -53,10 +75,10 @@ Ask these questions before changing files:
    Suggested choices: shell, Claude Code, Codex, Cursor, OpenCode, Hermes, OpenClaw, Chrome browser, macOS activity, Windows activity.
 
 2. Where should OpenContext memory be connected?
-   Suggested choices: Claude Code, Cursor or other project agents via a project memory file, Hermes, OpenClaw, standalone `~/.opencontext/memory.md`.
+   Suggested choices: OpenContext skill only (least invasive), Claude Code, Cursor or other project agents via a project memory file, Hermes, OpenClaw, standalone `~/.opencontext/memory.md`.
 
 3. Should memory be global or project-specific?
-   Global means one memory file for all work. Project-specific means one subscription filtered to the current repo/project.
+   Global means one memory file for all work. Project-specific means one subscription filtered to the current repo/project. Skill-only mode means no automatic memory file is configured.
 
 4. What privacy level should be allowed?
    Recommend L2 for useful command and agent context. Use L1 for conservative metadata-only capture. Do not enable L3 unless the user explicitly asks.
