@@ -560,16 +560,12 @@ When stdout is not a TTY, output defaults to JSON for agent parsing. Use
 				return nil
 			}
 
-			fmt.Printf("%-24s %-8s %-10s %-16s %s\n", "TIME", "SOURCE", "PLATFORM", "TYPE", "SUMMARY")
-			fmt.Printf("%-24s %-8s %-10s %-16s %s\n", "────────────────────────", "────────", "──────────", "────────────────", "───────────────────────────────────────")
+			fmt.Printf("%-24s %-8s %-16s %s\n", "TIME", "SOURCE", "TYPE", "SUMMARY")
+			fmt.Printf("%-24s %-8s %-16s %s\n", "────────────────────────", "────────", "────────────────", "───────────────────────────────────────")
 			for _, e := range resp.Events {
 				ts := time.UnixMilli(e.Ts).Format("2006-01-02 15:04:05")
 				summary := buildEventSummary(e)
-				platform := e.Labels["platform"]
-				if platform == "" {
-					platform = "-"
-				}
-				fmt.Printf("%-24s %-8s %-10s %-16s %s\n", ts, e.Source, platform, e.Type, summary)
+				fmt.Printf("%-24s %-8s %-16s %s\n", ts, e.Source, e.Type, summary)
 			}
 
 			if resp.Truncated {
