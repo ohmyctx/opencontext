@@ -15,9 +15,6 @@
   <a href="https://github.com/ohmyctx/opencontext/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   </a>
-  <a href="https://goreportcard.com/report/github.com/ohmyctx/opencontext">
-    <img src="https://goreportcard.com/badge/github.com/ohmyctx/opencontext" alt="Go Report Card"/>
-  </a>
 </p>
 
 <p align="center">
@@ -26,9 +23,9 @@
 
 <p align="center">
   <a href="INSTALL.md">Agent 安装指南</a> ·
+  <a href="config.example.yaml">配置参考</a> ·
   <a href="docs/PROTOCOL.md">协议文档</a> ·
-  <a href="docs/COLLECTORS.md">Collector 文档</a> ·
-  <a href="docs/COLLECTOR_ARCHITECTURE.md">Collector 架构</a>
+  <a href="docs/COLLECTORS.md">Collector 文档</a>
 </p>
 
 <br>
@@ -55,19 +52,65 @@
                   提交记录、当前项目和未完成事项。
 ```
 
-## 核心思路
+## 为什么需要 OpenContext
 
-- Collector 从 shell、Claude Code、Codex、Cursor、OpenCode 等工具采集事件
-- `oc daemon` 在本地接收事件、过滤隐私等级、写入 SQLite
-- Subscription 决定哪些项目、哪些来源会进入某个记忆文件
-- Agent 通过 `memory.md`、`CLAUDE.md` 引用，或 Hermes/OpenClaw 的记忆文件读取上下文
+AI 编程 Agent 很强大，但大多数情况下每次新会话都记不住上次聊了什么。OpenContext 为它们构建了一个本地活动层：
 
-## 快速开始
+- Shell 命令、Agent 提示、IDE hooks 以及更多收集器的事件流入同一个本地事件存储
+- 隐私等级决定记录什么、丢弃什么
+- Subscription 决定哪些项目和来源会成为 Agent 可读的记忆
+- `memory.md` 可以被 Claude Code、Cursor、Hermes、OpenClaw 等 Agent 引用
+
+## AI Agent 安装（推荐）
+
+> **最简单的方式** — 把下面这行发给 Claude Code 或任意 AI 编程 Agent，它会自动完成整个安装和配置：
+
+```bash
+Follow https://raw.githubusercontent.com/ohmyctx/opencontext/refs/heads/main/INSTALL.md to install and configure opencontext.
+```
+
+## 手动安装
+
+### npm（推荐）
 
 ```bash
 npm install -g @ohmyctx/opencontext
 oc --version
+```
 
+### GitHub Releases
+
+从 [GitHub Releases](https://github.com/ohmyctx/opencontext/releases) 下载对应平台的压缩包：
+
+- `oc-v<version>-darwin-arm64.tar.gz`
+- `oc-v<version>-darwin-amd64.tar.gz`
+- `oc-v<version>-linux-arm64.tar.gz`
+- `oc-v<version>-linux-amd64.tar.gz`
+- `oc-v<version>-windows-amd64.zip`
+
+```bash
+# Linux amd64
+curl -L -o oc https://github.com/ohmyctx/opencontext/releases/latest/download/oc-v<version>-linux-amd64.tar.gz
+tar -xzf oc-*.tar.gz
+./oc --version
+```
+
+### 源码编译
+
+需要 Go 1.22+：
+
+```bash
+git clone https://github.com/ohmyctx/opencontext.git
+cd opencontext
+make build
+./bin/oc --version
+```
+
+## 快速开始
+
+启动守护进程：
+
+```bash
 oc daemon
 ```
 
@@ -76,10 +119,10 @@ oc daemon
 ```bash
 oc status
 oc collector shell install
-source ~/.zshrc
+source ~/.zshrc    # bash 用户用 ~/.bashrc
 ```
 
-创建 `~/.opencontext/config.yaml`：
+创建 `~/.opencontext/config.yaml` — 完整配置参考见 [`config.example.yaml`](config.example.yaml)：
 
 ```yaml
 subscriptions:
@@ -93,148 +136,38 @@ subscriptions:
     refresh_interval: 1800
 ```
 
-手动编译一次：
+编译一次并验证：
 
 ```bash
-oc compile --subscription global
+oc compile
 cat ~/.opencontext/memory.md
 ```
 
-如果你希望让用户的 AI Agent 自动完成安装和配置，把 [INSTALL.md](INSTALL.md) 发给它读。
-
-如果希望常驻后台运行：
+常驻后台运行：
 
 ```bash
 oc daemon install
 oc daemon status
-oc daemon logs -f
 ```
 
-后台服务管理在 macOS 使用 launchd，在 Linux 优先使用 systemd；WSL/container 这类没有 systemd 的环境会自动退回到 pidfile 后台进程。
-
-## 架构
-
-```mermaid
-flowchart LR
-    subgraph Sources["Collectors"]
-        Shell["Shell hooks"]
-        AgentHooks["Claude / Codex / Cursor / OpenCode hooks"]
-        Future["Git / browser / IDE / OS collectors"]
-    end
-
-    Sources -->|HTTP events| Daemon["oc daemon"]
-    Daemon --> Policy["Privacy filter"]
-    Policy --> Store[("SQLite + FTS")]
-    Store --> Compiler["Memory compiler"]
-    Compiler --> Memory["memory.md"]
-    Compiler --> Inject["Injected agent memory sections"]
-
-    Memory --> Agents["Claude Code / Cursor / other agents"]
-    Inject --> Hermes["Hermes"]
-    Inject --> OpenClaw["OpenClaw"]
-```
+macOS 使用 launchd，Linux 优先用 systemd，没有 systemd 的环境（WSL/容器）自动降级为 pidfile 后台进程。
 
 ## Collectors
 
 | 来源 | 安装命令 | 说明 |
 |---|---|---|
-| Shell | `oc collector shell install` | zsh/bash 命令事件 |
+| Shell | `oc collector shell install` | zsh/bash 命令历史，含隐私过滤 |
 | Claude Code | `oc collector claude install` | 安装 Claude Code HTTP hooks |
 | Codex | `oc collector codex install` | 安装 Codex hook adapter |
 | Cursor | `oc collector cursor install` | 安装 Cursor hook adapter |
 | OpenCode | `oc collector opencode install` | 安装 OpenCode hook adapter |
-| Chrome browser | `oc collector browser-chrome install` | 可选浏览器扩展，采集页面访问、tab focus、搜索、表单和明确页面操作 |
-| macOS activity | 见 [Collector 安装指南](docs/COLLECTOR_INSTALL.md) | 可选外部 collector，需要 Accessibility 权限 |
-| Windows activity | 见 [Collector 安装指南](docs/COLLECTOR_INSTALL.md) | 可选外部 collector，可前台运行或接入任务计划 |
+| Chrome 浏览器 | `oc collector browser-chrome install` | 可选扩展，需从 `chrome://extensions` 手动加载 |
+| Firefox 浏览器 | `oc collector browser-firefox install` | 可选扩展，适用于 Firefox |
+| Edge 浏览器 | `oc collector browser-edge install` | 可选扩展，适用于 Edge |
+| macOS 活动 | 见 [Collector 安装指南](docs/COLLECTOR_INSTALL.md) | 可选外部 collector，需 Accessibility 权限 |
+| Windows 活动 | 见 [Collector 安装指南](docs/COLLECTOR_INSTALL.md) | 可选外部 collector，可前台运行或接入任务计划 |
 
-可以用 `oc collectors list` 和 `oc collectors info <name>` 查看 collector 的 manifest、版本、事件来源、安装命令和 schema 引用。
-
-Claude、Codex、Cursor、OpenCode 这类 bundled hook collector 不会在 `collectors/` 下各自放一份独立进程代码。它们的安装命令只负责修改目标工具的 hook 配置，daemon 里的 `/api/v1/hooks/...` adapter 会把第三方 payload 转成 OpenContext 事件。`collectors/` 目录只放真正需要独立运行的 collector，比如 shell、macOS activity、Windows activity。
-
-### 自己开发 Collector
-
-Collector 不绑定语言。你可以用 Go、Python、Rust、Shell、插件或任何进程实现，只要能往 daemon 上报 OpenContext event：
-
-```bash
-curl -X POST http://localhost:6060/api/v1/events \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source": "my_tool",
-    "type": "activity",
-    "sensitivity": 1,
-    "labels": {"project": "my-project"},
-    "payload": {"summary": "something happened"}
-  }'
-```
-
-批量上报可以 POST `{ "events": [...] }` 到 `/api/v1/events/batch`。Schema 是用于发现、展示和文档的元数据，不应该成为 daemon 接收事件的强依赖。更多细节见 [docs/COLLECTOR_ARCHITECTURE.md](docs/COLLECTOR_ARCHITECTURE.md) 和 [docs/PROTOCOL.md](docs/PROTOCOL.md)。
-
-## Subscription 示例
-
-全局记忆：
-
-```yaml
-subscriptions:
-  - name: "global"
-    filter:
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
-      max_sensitivity: 2
-    memory:
-      backend: "raw_dump"
-      path: "~/.opencontext/memory.md"
-    refresh_interval: 1800
-```
-
-单项目记忆：
-
-```yaml
-subscriptions:
-  - name: "my-project"
-    filter:
-      projects: ["my-project"]
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
-      max_sensitivity: 2
-    memory:
-      backend: "raw_dump"
-      path: "/path/to/my-project/.opencontext/memory.md"
-      claude_md: "/path/to/my-project/CLAUDE.md"
-    refresh_interval: 1800
-```
-
-Hermes / OpenClaw 注入：
-
-```yaml
-memory:
-  backend: "raw_dump"
-  path: "~/.opencontext/memory.md"
-  inject_targets:
-    - path: "~/.hermes/memories/MEMORY.md"
-      header: "## OpenContext Recent Activity"
-    - path: "~/.openclaw/workspace/MEMORY.md"
-      header: "## OpenContext Recent Activity"
-```
-
-## 常用命令
-
-```bash
-oc daemon
-oc daemon install
-oc daemon restart
-oc daemon logs -f
-oc status
-oc events --since 2h
-oc collectors list
-oc collectors info cursor
-oc collectors schemas
-oc compile --subscription global
-oc collector shell install
-oc collector claude install
-oc collector codex install
-oc collector cursor install
-oc collector opencode install
-oc inject hermes
-oc inject openclaw
-```
+用 `oc collectors list` 和 `oc collectors info <name>` 查看 collector manifest、版本、事件来源、安装命令和 schema 引用。
 
 ## 隐私等级
 
