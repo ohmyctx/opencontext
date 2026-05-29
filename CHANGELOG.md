@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-05-29
+
+### Added
+- **OpenClaw Hook**: Node.js hook script for OpenClaw agent session capture
+- **Hermes Hook**: Python hook script for Hermes agent session capture
+- **Agent Skill**: Optional `skills/opencontext/SKILL.md` for on-demand context queries without modifying system prompts or project files
+- **Privacy Expanded README**: Full privacy control model documented in README with sensitivity levels, source/label filtering, subscription isolation, and privacy checklist
+
+### Fixed
+- **Claude Hook Dedup**: Use `/hooks/claude` as dedup key instead of full URL to prevent duplicate entries from `127.0.0.1` vs `localhost`
+- **YAML Path Bug**: Bare `~` in config paths unmarshals to Go nil causing silent WriteFile failure; absolute paths now used in all docs/examples
+
+### Changed
+- **`projects` filter replaced with `label_selectors`**: Generic label-based filtering replaces removed `projects` field
+- **Default `refresh_interval`**: Changed from 1800s (30min) to 300s (5min)
+- **`opencontext-project` subscription removed**: Local config no longer has project-scoped subscription pointing to repo-tracked CLAUDE.md
+
 ## [0.2.0] - 2026-05-29
 
 ### Added
