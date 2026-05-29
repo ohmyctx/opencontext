@@ -1,0 +1,147 @@
+# =============================================================================
+# OpenContext Configuration Example / 配置文件示例
+# =============================================================================
+# This file shows all available configuration options with descriptions.
+# Run `oc schema config --format json` for a machine-readable schema.
+#
+# 中文说明：此文件展示所有可用配置项及其含义。运行 `oc schema config --format json`
+# 获取机器可读的配置 schema。
+# =============================================================================
+
+# ─── Daemon / 守护进程 ────────────────────────────────────────────────────────
+
+# data_dir: Directory where OpenContext stores SQLite DB, memory files, and logs.
+# 数据目录：OpenContext 存储 SQLite 数据库、内存文件和日志的目录。
+data_dir: "~/.opencontext"
+
+# listen_addr: HTTP address the daemon listens on. Agents and collectors POST here.
+# 监听地址：守护进程监听的 HTTP 地址。Agent 和收集器向此地址发送事件。
+listen_addr: "127.0.0.1:6060"
+
+# log_level: Logging verbosity. Options: debug, info, warn, error.
+# 日志级别：日志详细程度。选项：debug, info, warn, error。
+log_level: "info"
+
+# max_sensitivity: Global ingestion cap. Events above this sensitivity are dropped.
+# Options: 1 (L1, metadata only), 2 (L2, default, full args/URLs), 3 (L3, raw input).
+# 全局敏感度上限：超过此敏感度级别的事件将被丢弃。
+# 选项：1（L1，仅元数据），2（L2，默认值，含完整参数/URL），3（L3，原始输入）。
+max_sensitivity: 2
+
+# retention_days: How many days to keep raw events before daily pruning. 0 = no pruning.
+# 保留天数：事件保留天数，超过后每日清理。0 = 不清理（默认90天）。
+retention_days: 90
+
+# ─── Subscriptions / 订阅配置 ─────────────────────────────────────────────────
+# A subscription chooses which events become memory and where that memory is written.
+# 一条订阅决定哪些事件成为记忆，以及记忆写入到哪里。
+
+subscriptions:
+  # ── Example 1: Global memory — all projects, all configured sources
+  # 示例 1：全局记忆 — 所有项目，所有配置的来源 ─────────────────────────────
+  - name: "global"
+    # filter: Controls which events are included in this subscription.
+    # 过滤器：控制此订阅包含哪些事件。
+    filter:
+      # projects: Empty = all projects. Set project names to scope to specific repos.
+      # 项目：空 = 所有项目。设置项目名称以限定到特定代码库。
+      projects: []
+      # sources: Event sources to capture. Empty = all sources.
+      # 来源：要捕获的事件来源。空 = 所有来源。
+      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      # max_sensitivity: Maximum sensitivity level to include (1/2/3, default 2).
+      # 敏感度上限：包含的最大敏感度级别（1/2/3，默认2）。
+      max_sensitivity: 2
+    # memory: Where and how to write the compiled memory.
+    # 记忆：编译后记忆的写入位置和方式。
+    memory:
+      # backend: Output format. "raw_dump" = recent events as markdown (no LLM needed).
+      #         "file" = LLM-summarized memory (requires LLM config below).
+      # 后端：输出格式。"raw_dump" = 近期事件直接写入 markdown（无需 LLM）。
+      #      "file" = LLM 总结的记忆（需要下方 LLM 配置）。
+      backend: "raw_dump"
+      # path: Absolute path (or ~/) to the output memory file.
+      # 路径：输出记忆文件的绝对路径（或 ~/）。
+      path: "~/.opencontext/memory.md"
+      # claude_md: Optional path to a CLAUDE.md file. OpenContext appends an
+      #           @.opencontext/memory.md reference so Claude Code picks it up.
+      # claude_md：可选的 CLAUDE.md 文件路径。OpenContext 会追加
+      #           @.opencontext/memory.md 引用，让 Claude Code 自动读取。
+      # claude_md: "~/.claude/CLAUDE.md"
+      # inject_targets: Additional files to inject the memory section into.
+      #                 Useful for Hermes, OpenClaw, or any agent that reads a
+      #                 Markdown memory file.
+      # 注入目标：额外的文件列表，用于注入记忆片段。
+      #            适用于 Hermes、OpenClaw 或任何读取 Markdown 记忆文件的 Agent。
+      # inject_targets:
+      #   - path: "~/.hermes/memories/MEMORY.md"
+      #     header: "## OpenContext Recent Activity"
+    # refresh_interval: Seconds between raw_dump auto-compiles (default 30, min 10).
+    # 刷新间隔：raw_dump 自动编译间隔，单位秒（默认30，最小10）。
+    refresh_interval: 1800
+
+  # ── Example 2: Project-specific memory — scoped to one repository
+  # 示例 2：项目级记忆 — 限定到特定代码库 ─────────────────────────────────────
+  # - name: "my-project"
+  #   filter:
+  #     projects: ["my-project"]
+  #     sources: ["shell", "claude", "codex", "cursor", "opencode", "browser"]
+  #     max_sensitivity: 2
+  #   memory:
+  #     backend: "raw_dump"
+  #     path: "/path/to/my-project/.opencontext/memory.md"
+  #     claude_md: "/path/to/my-project/CLAUDE.md"
+  #   refresh_interval: 1800
+
+  # ── Example 3: LLM summarization — requires LLM config below
+  # 示例 3：LLM 总结模式 — 需要下方 LLM 配置 ──────────────────────────────────
+  # - name: "summarized"
+  #   filter:
+  #     sources: ["shell", "claude"]
+  #     max_sensitivity: 2
+  #   memory:
+  #     backend: "file"
+  #     path: "~/.opencontext/memory.md"
+  #   schedule: "0 */6 * * *"   # cron: every 6 hours
+  #   # LLM: OpenAI / Anthropic compatible API. Leave api_key empty to use defaults.
+  #   # LLM：OpenAI / Anthropic 兼容 API。api_key 为空则使用环境变量或默认配置。
+  #   llm:
+  #     provider: "openai"      # or "anthropic", "ollama"
+  #     model: "gpt-4o"
+  #     api_key: ""             # set your key here, or use OPENAI_API_KEY env var
+  #     base_url: ""            # optional custom API endpoint
+
+# ─── All Config Fields Reference / 全部配置字段参考 ───────────────────────────
+#
+# Daemon-level (top-level):
+#   data_dir        string   Storage root directory (default: ~/.opencontext)
+#   listen_addr     string   HTTP listen address (default: 127.0.0.1:6060)
+#   log_level      string   Log level: debug|info|warn|error (default: info)
+#   max_sensitivity int     Global ingestion cap 1-3 (default: 2)
+#   retention_days  int      Days to keep events, 0=forever (default: 90)
+#   subscriptions  []Subscription  List of memory subscriptions
+#
+# Subscription fields:
+#   name           string   Unique subscription name
+#   filter.projects        []string  Project name filter (empty=all)
+#   filter.sources         []string  Source name filter (empty=all)
+#   filter.max_sensitivity int      Per-subscription sensitivity cap
+#   memory.backend        string   "raw_dump" or "file"
+#   memory.path          string   Output memory file path
+#   memory.claude_md     string   CLAUDE.md auto-reference path
+#   memory.inject_targets []InjectTarget  Additional injection files
+#   schedule           string   Cron expression for LLM compile triggers
+#   refresh_interval   int      Seconds between raw_dump auto-refreshes
+#   llm.provider       string   LLM provider: openai|anthropic|ollama
+#   llm.model          string   Model name
+#   llm.api_key        string   API key (or env var)
+#   llm.base_url       string   Custom API endpoint URL
+#
+# InjectTarget fields:
+#   path    string   Target file path to inject memory into
+#   header  string   Section heading inside injected block (default: "## OpenContext — Recent Activity")
+#
+# Privacy sensitivity levels:
+#   L1 (1): App name, command name, git repo, URL domain only
+#   L2 (2): Full command args, commit messages, full URLs (default)
+#   L3 (3): Keyboard input, full chat text, screenshots
