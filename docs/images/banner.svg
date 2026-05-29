@@ -1,51 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" role="img" aria-label="OpenContext Banner">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0b1020"/>
-      <stop offset="50%" stop-color="#111827"/>
-      <stop offset="100%" stop-color="#0f172a"/>
-    </linearGradient>
-    <linearGradient id="title" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#818cf8"/>
-      <stop offset="45%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#22d3ee"/>
-    </linearGradient>
-    <linearGradient id="logo-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#0891b2"/>
-    </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="2.5" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
-      <path d="M24 0H0V24" fill="none" stroke="rgba(148,163,184,0.08)" stroke-width="1"/>
-    </pattern>
-  </defs>
-
-  <rect width="800" height="200" fill="url(#bg)"/>
-  <rect width="800" height="200" fill="url(#grid)"/>
-
-  <circle cx="720" cy="40" r="90" fill="rgba(99,102,241,0.12)"/>
-  <circle cx="90" cy="170" r="70" fill="rgba(34,211,238,0.08)"/>
-
-  <g transform="translate(72, 52)">
-    <rect width="96" height="96" rx="22" fill="url(#logo-bg)"/>
-    <circle cx="48" cy="48" r="34" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="3"/>
-    <circle cx="48" cy="48" r="24" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="3"/>
-    <circle cx="48" cy="48" r="14" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="3"/>
-    <circle cx="48" cy="48" r="6" fill="#ffffff"/>
-    <circle cx="72" cy="28" r="5" fill="#a5f3fc"/>
+<svg width="800" height="200" xmlns="http://www.w3.org/2000/svg" aria-label="OpenContext Banner" role="img">
+ <defs>
+  <linearGradient y2="100%" x2="100%" y1="0%" x1="0%" id="bg">
+   <stop stop-color="#0b1020" offset="0%"/>
+   <stop stop-color="#111827" offset="50%"/>
+   <stop stop-color="#0f172a" offset="100%"/>
+  </linearGradient>
+  <linearGradient y2="0%" x2="100%" y1="0%" x1="0%" id="title">
+   <stop stop-color="#818cf8" offset="0%"/>
+   <stop stop-color="#6366f1" offset="45%"/>
+   <stop stop-color="#22d3ee" offset="100%"/>
+  </linearGradient>
+  <linearGradient y2="100%" x2="100%" y1="0%" x1="0%" id="logo-bg">
+   <stop stop-color="#6366f1" offset="0%"/>
+   <stop stop-color="#0891b2" offset="100%"/>
+  </linearGradient>
+  <pattern patternUnits="userSpaceOnUse" height="24" width="24" id="grid">
+   <path id="svg_1" stroke="rgba(148,163,184,0.08)" fill="none" d="m24,0l-24,0l0,24"/>
+  </pattern>
+ </defs>
+ <g>
+  <title>Layer 1</title>
+  <rect id="svg_2" fill="url(#bg)" height="200" width="800"/>
+  <path id="svg_3" d="m0,0l800,0l0,200l-800,0l0,-200z" opacity="undefined" fill="url(#grid)"/>
+  <circle id="svg_4" fill="rgba(99,102,241,0.12)" r="90" cy="40" cx="720"/>
+  <circle id="svg_5" fill="rgba(34,211,238,0.08)" r="70" cy="170" cx="90"/>
+  <g id="svg_6">
+   <rect id="svg_7" x="72" y="52" fill="url(#logo-bg)" rx="22" height="96" width="96"/>
+   <circle id="svg_8" stroke-width="3" stroke="rgba(255,255,255,0.22)" fill="none" r="34" cy="100" cx="120"/>
+   <circle id="svg_9" stroke-width="3" stroke="rgba(255,255,255,0.45)" fill="none" r="24" cy="100" cx="120"/>
+   <circle id="svg_10" stroke-width="3" stroke="rgba(255,255,255,0.85)" fill="none" r="14" cy="100" cx="120"/>
+   <circle id="svg_11" fill="#ffffff" r="6" cy="100" cx="120"/>
+   <circle id="svg_12" fill="#a5f3fc" r="5" cy="80" cx="144"/>
   </g>
-
-  <text x="196" y="92" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="56" font-weight="700" fill="url(#title)" filter="url(#glow)" letter-spacing="-1.5">OpenContext</text>
-  <text x="196" y="126" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="17" fill="#94a3b8">Local-first work memory for AI agents</text>
-
-  <g transform="translate(196, 142)">
-    <rect width="118" height="24" rx="12" fill="rgba(99,102,241,0.16)" stroke="rgba(129,140,248,0.35)" stroke-width="1"/>
-    <text x="59" y="16" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#c7d2fe" text-anchor="middle">memory.md</text>
-  </g>
+  <text id="svg_13" letter-spacing="-1.5" fill="url(#title)" font-weight="700" font-size="56" font-family="system-ui, -apple-system, Segoe UI, sans-serif" y="101" x="195">OpenContext</text>
+  <text id="svg_14" fill="#94a3b8" font-size="17" font-family="system-ui, -apple-system, Segoe UI, sans-serif" y="136" x="204">Local-first work memory for AI agents</text>
+ </g>
 </svg>
