@@ -132,7 +132,7 @@ subscriptions:
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
-      path: "~/.opencontext/memory.md"
+      path: "/root/.opencontext/memory.md"
     refresh_interval: 300
 ```
 
@@ -171,13 +171,87 @@ Run `oc collectors list` and `oc collectors info <name>` to inspect collector ma
 
 ## Privacy
 
-| Level | Default | Content |
-|---|---:|---|
-| L1 | on | app name, command name, git repo, URL domain |
-| L2 | opt-in | full command args, commit messages, full URLs |
-| L3 | off | keyboard input, full chat text, screenshots |
+OpenContext is built around one principle: **your data stays on your machine**. Everything captured is stored locally, and you control exactly what signals become agent-readable memory.
 
-Commands starting with a space are never recorded by the shell collector.
+### Why Privacy Matters
+
+AI coding agents are increasingly woven into daily workflow. Without a privacy layer, they silently observe every shell command and its arguments, every prompt submitted, every file edited, browsing history, clipboard content, and keystrokes.
+
+OpenContext gives you a choice. Instead of unbounded surveillance, you define what context the agent receives — and at what depth.
+
+### Sensitivity Levels
+
+Three levels control what is recorded. A global `max_sensitivity` cap prevents any collector from exceeding the configured level.
+
+| Level | What is recorded | Default |
+|---|---|---|
+| **L1** | App name, command name, git repo, URL domain only | On |
+| **L2** | Full command arguments, commit messages, complete URLs | Opt-in |
+| **L3** | Keyboard input, full chat text, screenshots | Off |
+
+L3 events (clipboard, raw keystrokes) are never collected without explicit consent. They are not needed for useful agent context and carry significant privacy risk.
+
+### Source Filtering
+
+Not every source is relevant to every project. Each subscription specifies which sources to include:
+
+```yaml
+# Only shell and agent events — no OS/browser activity
+sources: ["shell", "claude", "codex", "cursor", "opencode"]
+```
+
+Exclude collectors you don't use. If you don't use Cursor, remove `"cursor"` from the list.
+
+### Label-Based Filtering
+
+Filter events by arbitrary key-value labels using `label_selectors`:
+
+```yaml
+# Only events tagged with project=opencontext
+filter:
+  label_selectors:
+    project: "opencontext"
+```
+
+This lets you scope memory to a specific repository or task without mixing in unrelated activity.
+
+### Shell Collector Privacy Features
+
+- **Commands starting with a space are never recorded.** Prefix a command with a space and it is invisible to the shell collector.
+- **Selective recording by sensitivity level.** The `--sensitivity` flag during install controls how much detail the shell collector captures.
+- **No credential capture.** Shell hooks explicitly avoid recording command strings that appear to contain passwords, tokens, or API keys.
+
+### Data Retention
+
+Raw events are stored in a local SQLite database (`~/.opencontext/`). The `retention_days` setting controls how long events are kept before daily pruning:
+
+```yaml
+retention_days: 90   # default: 90 days; 0 = never prune
+```
+
+### Subscription Isolation
+
+Each subscription is independent. A project subscription for `project=myapp` has its own memory file and cannot read events tagged for a different project. This prevents cross-project context bleeding.
+
+### What Stays Local
+
+| Data | Where it goes |
+|---|---|
+| Shell events | `~/.opencontext/` SQLite DB, then compiled to your memory file |
+| Agent prompts | Sent via HTTP hook to the local daemon, same flow |
+| Injected memory | Written directly to your configured target files |
+| Nothing | Never sent to a remote server without your explicit configuration |
+
+OpenContext has no cloud backend. There is no account, no telemetry, and no external server unless you configure an LLM provider for summarization — and even then only the compiled memory (not raw events) is sent.
+
+### Privacy Checklist
+
+- [ ] Set `max_sensitivity` to `2` (not `3`) unless you specifically need L3
+- [ ] Only install collectors for tools you actually use
+- [ ] Use `label_selectors` to scope memory per project
+- [ ] Prefix sensitive commands with a space in shell
+- [ ] Set `retention_days` to a value you are comfortable with
+- [ ] Review `~/.opencontext/memory.md` to confirm what agents will see
 
 ## License
 

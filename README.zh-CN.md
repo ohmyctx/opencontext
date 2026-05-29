@@ -132,7 +132,7 @@ subscriptions:
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
-      path: "~/.opencontext/memory.md"
+      path: "/root/.opencontext/memory.md"
     refresh_interval: 300
 ```
 
@@ -169,15 +169,93 @@ macOS 使用 launchd，Linux 优先用 systemd，没有 systemd 的环境（WSL/
 
 用 `oc collectors list` 和 `oc collectors info <name>` 查看 collector manifest、版本、事件来源、安装命令和 schema 引用。
 
-## 隐私等级
+## 隐私
 
-| 等级 | 默认 | 内容 |
-|---|---:|---|
-| L1 | 开启 | app 名、命令名、git repo、URL 域名 |
-| L2 | 用户选择开启 | 完整命令参数、commit message、完整 URL |
-| L3 | 关闭 | 键盘输入、完整聊天内容、截图 |
+OpenContext 遵循一个核心原则：**你的数据留在本机**。OpenContext 采集的所有内容都存储在本地，你控制哪些信号会成为 Agent 可读的记忆。
 
-Shell collector 不会记录以空格开头的命令。
+### 为什么隐私很重要
+
+AI 编程 Agent 已深度融入日常工作流。没有隐私层的情况下，它们会默默监听：
+
+- 每一条 Shell 命令及其参数
+- 每一次提交的提示词和编辑的文件
+- 浏览历史、剪贴板内容、键盘输入
+
+OpenContext 把选择权还给你。你定义 Agent 能看到什么上下文，以及在什么粒度上看到。
+
+### 敏感度等级
+
+三个等级控制记录的内容。全局 `max_sensitivity` 上限阻止任何 Collector 超过配置等级采集。
+
+| 等级 | 记录内容 | 默认 |
+|---|---|---|
+| **L1** | 仅 App 名、命令名、git repo、URL 域名 | 开启 |
+| **L2** | 完整命令参数、commit message、完整 URL | 需选择开启 |
+| **L3** | 键盘输入、完整聊天内容、截图 | 关闭 |
+
+L3 事件（剪贴板、原始按键）除非明确授权，否则永不采集。它们对有用的 Agent 上下文并非必需，且带来显著隐私风险。
+
+### 来源过滤
+
+并非每个来源都和每个项目相关。每个订阅可以指定包含哪些来源：
+
+```yaml
+# 只采集 shell 和 agent 事件 — 不包含 OS/浏览器活动
+sources: ["shell", "claude", "codex", "cursor", "opencode"]
+```
+
+只安装你实际使用的 Collector。如果不用 Cursor，从列表中移除 `"cursor"`。
+
+### 标签过滤
+
+使用 `label_selectors` 按任意键值对过滤事件：
+
+```yaml
+# 只采集标签为 project=opencontext 的事件
+filter:
+  label_selectors:
+    project: "opencontext"
+```
+
+这让你可以把记忆限定在特定仓库或任务，不会混入无关活动。
+
+### Shell Collector 隐私功能
+
+- **以空格开头的命令永不记录。** 在命令前加空格，Shell collector 完全看不见。
+- **按敏感度等级选择记录。** 安装时的 `--sensitivity` 标志控制 Shell collector 采集的详细程度。
+- **不采集凭证。** Shell hooks 明确避免记录包含密码、Token 或 API 密钥的命令字符串。
+
+### 数据保留
+
+原始事件存在本地 SQLite 数据库（`~/.opencontext/`）。`retention_days` 设置控制事件保留天数，超期后每日清理：
+
+```yaml
+retention_days: 90   # 默认 90 天；0 = 不清理
+```
+
+### 订阅隔离
+
+每个订阅相互独立。`project=myapp` 的项目订阅有独立的记忆文件，无法读取标记到其他项目的事件。这防止了跨项目上下文渗透。
+
+### 数据流向
+
+| 数据 | 去向 |
+|---|---|
+| Shell 事件 | 存入 `~/.opencontext/` SQLite DB，编译后写入你的记忆文件 |
+| Agent 提示 | 通过 HTTP hook 发送到本地 daemon，走相同流程 |
+| 注入记忆 | 直接写入你配置的目标文件 |
+| 无 | 未经你明确配置，不会发送到外部服务器 |
+
+OpenContext 没有云端后端。不需要账号、不做遥测、没有外部服务器——除非你配置了 LLM 提供商进行总结——即便如此，也只发送编译后的记忆（不是原始事件）。
+
+### 隐私检查清单
+
+- [ ] 将 `max_sensitivity` 设为 `2`（不是 `3`），除非明确需要 L3
+- [ ] 只安装你实际使用的 Collector
+- [ ] 使用 `label_selectors` 按项目限定记忆范围
+- [ ] 在 Shell 中用空格前缀保护敏感命令
+- [ ] 设置让你舒适的 `retention_days` 值
+- [ ] 检查 `~/.opencontext/memory.md` 确认 Agent 会看到什么内容
 
 ## License
 
