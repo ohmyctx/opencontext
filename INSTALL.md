@@ -245,6 +245,8 @@ Create the parent directory if needed:
 mkdir -p ~/.opencontext
 ```
 
+A full configuration reference with all options and descriptions is available at [`config.example.yaml`](config.example.yaml). Use it as a starting point.
+
 Use `backend: "raw_dump"` unless the user explicitly wants LLM summarization and has provided model credentials.
 
 `refresh_interval` is seconds.
