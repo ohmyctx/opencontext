@@ -184,6 +184,10 @@ func (s *SQLiteEventStore) Query(ctx context.Context, q *event.QueryRequest) ([]
 		query += " AND json_extract(labels, '$.project') = ?"
 		args = append(args, q.Project)
 	}
+	for key, value := range q.LabelSelectors {
+		query += fmt.Sprintf(" AND json_extract(labels, '$.%s') = ?", key)
+		args = append(args, value)
+	}
 
 	query += " ORDER BY ts DESC LIMIT ?"
 	args = append(args, limit)

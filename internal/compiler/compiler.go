@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sort"
 	"strings"
 	"time"
 
@@ -169,31 +168,11 @@ func (c *Compiler) Run(ctx context.Context, sub *subscription.Subscription) erro
 
 // queryEvents fetches events matching a subscription's filter.
 func (c *Compiler) queryEvents(ctx context.Context, sub *subscription.Subscription, since int64) ([]*event.ActivityEvent, error) {
-	// If subscription filters by projects, query each project separately and merge
-	if len(sub.Filter.Projects) > 0 {
-		var all []*event.ActivityEvent
-		for _, proj := range sub.Filter.Projects {
-			evts, err := c.store.Events.Query(ctx, &event.QueryRequest{
-				Project:        proj,
-				Since:          since,
-				MaxSensitivity: sub.MaxSensitivity(),
-				Limit:          5000,
-			})
-			if err != nil {
-				return nil, err
-			}
-			all = append(all, evts...)
-		}
-		// Sort merged results by timestamp
-		sort.Slice(all, func(i, j int) bool { return all[i].Ts < all[j].Ts })
-		return all, nil
-	}
-
-	// No project filter — query all
 	return c.store.Events.Query(ctx, &event.QueryRequest{
 		Since:          since,
 		MaxSensitivity: sub.MaxSensitivity(),
 		Limit:          5000,
+		LabelSelectors: sub.Filter.LabelSelectors,
 	})
 }
 
@@ -241,12 +220,6 @@ func (c *Compiler) summarizeTier(
 }
 
 func inferProject(sub *subscription.Subscription) string {
-	if len(sub.Filter.Projects) == 1 {
-		return sub.Filter.Projects[0]
-	}
-	if len(sub.Filter.Projects) > 1 {
-		return strings.Join(sub.Filter.Projects, ", ")
-	}
 	return sub.Name
 }
 

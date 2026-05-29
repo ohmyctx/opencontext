@@ -58,7 +58,7 @@ AI coding agents are powerful, but they start most sessions without memory of wh
 
 - shell commands, agent prompts, IDE hooks, and future collectors flow into one local event store
 - privacy levels decide what is recorded and what is dropped
-- subscriptions decide which projects and sources become agent-readable memory
+- subscriptions decide which sources and labels become agent-readable memory
 - `memory.md` can be referenced by Claude Code, Cursor, Hermes, OpenClaw, and other agents
 
 ## Install via AI Agent (Recommended)

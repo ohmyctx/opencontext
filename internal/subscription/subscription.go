@@ -29,9 +29,9 @@ const (
 
 // Filter defines which events a subscription includes.
 type Filter struct {
-	Projects       []string               `mapstructure:"projects"`        // empty = all
-	Sources        []event.Source         `mapstructure:"sources"`         // empty = all
-	MaxSensitivity event.SensitivityLevel `mapstructure:"max_sensitivity"` // 0 defaults to 2
+	Sources        []event.Source         `mapstructure:"sources"`          // empty = all
+	MaxSensitivity event.SensitivityLevel `mapstructure:"max_sensitivity"`  // 0 defaults to 2
+	LabelSelectors map[string]string      `mapstructure:"label_selectors"`  // key=value pairs; event must match all
 }
 
 // InjectTargetConfig describes one file to inject the memory section into.
@@ -74,9 +74,13 @@ type Subscription struct {
 }
 
 // EffectiveRefreshInterval returns the refresh interval in seconds, defaulting to 300 (5 min).
+// Values below 10 seconds are clamped to 10 to prevent excessive I/O.
 func (s *Subscription) EffectiveRefreshInterval() time.Duration {
 	if s.RefreshInterval <= 0 {
 		return 300 * time.Second
+	}
+	if s.RefreshInterval < 10 {
+		return 10 * time.Second
 	}
 	return time.Duration(s.RefreshInterval) * time.Second
 }

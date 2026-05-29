@@ -253,9 +253,11 @@ Use `backend: "raw_dump"` unless the user explicitly wants LLM summarization and
 
 `refresh_interval` is seconds.
 
+**Hot reload:** Changes to `~/.opencontext/config.yaml` are picked up automatically without restarting the daemon — the new config is reloaded within 500ms and subscription schedulers are restarted.
+
 ### Global Subscription
 
-Use this when the user wants one memory file across all projects:
+Use this when the user wants one memory file across all work:
 
 ```yaml
 subscriptions:
@@ -272,15 +274,16 @@ subscriptions:
 Remove any sources the user did not choose.
 If the user selected Chrome browser, include `"browser"` in `sources`.
 
-### Project Subscription
+### Project Subscription (Label-Based)
 
-Use this when the user wants memory scoped to one repo/project:
+Use this when the user wants memory scoped to a specific project by label:
 
 ```yaml
 subscriptions:
   - name: "<project-name>"
     filter:
-      projects: ["<project-name>"]
+      label_selectors:
+        project: "<project-name>"
       sources: ["shell", "claude", "codex", "cursor", "opencode"]
       max_sensitivity: 2
     memory:
@@ -291,7 +294,7 @@ subscriptions:
 
 Replace:
 
-- `<project-name>` with the repo/project name OpenContext records in event labels.
+- `<project-name>` with the project label value OpenContext records on events.
 - `<absolute-project-path>` with the actual project directory.
 - the source list with the user's selected collectors.
 If the user selected Chrome browser, include `"browser"` in `sources`.

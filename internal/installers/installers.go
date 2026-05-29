@@ -393,16 +393,11 @@ PROMPT_COMMAND="_oc_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 }
 
 func shellHookPwsh(ocBin string, sensitivity int) string {
-	var b strings.Builder
-	b.WriteString(`# OpenContext PowerShell hooks — installed by: oc collector shell install
-# oc binary: `)
-	b.WriteString(ocBin)
-	b.WriteString(`  sensitivity: `)
-	b.WriteString(fmt.Sprintf("%d", sensitivity))
-	b.WriteString(`
+	return fmt.Sprintf(`# OpenContext PowerShell hooks — installed by: oc collector shell install
+# oc binary: %s  sensitivity: %d
 
-$ocBin = "` + ocBin + `"
-$sensitivity = ` + fmt.Sprintf("%d", sensitivity) + `
+$ocBin = "%s"
+$sensitivity = %d
 
 $script:_oc_last_hist_id = -1
 $script:_oc_orig_prompt = if (Get-Command prompt -ErrorAction SilentlyContinue) {
@@ -423,32 +418,47 @@ function global:prompt {
     if ($lastCmd -and $lastCmd.Id -gt $script:_oc_last_hist_id) {
         $script:_oc_last_hist_id = $lastCmd.Id
         $cmd = $lastCmd.CommandLine
-        $dur = [Math]::Max(0, $lastCmd.Duration.TotalMilliseconds)
-        $cwd = if ($lastCmd.WorkingDirectory) { $lastCmd.WorkingDirectory } else { $PWD.Path }
-        & $ocBin collector shell push --command $cmd --exit-code $exit --duration-ms $([int]$dur) --cwd $cwd --sensitivity $sensitivity 2>$null | Out-Null
+        # PS7+ exposes Duration; PS5.1 only has Start/EndExecutionTime
+        $dur = if ($lastCmd.PSObject.Properties['Duration'] -and $null -ne $lastCmd.Duration) {
+            [Math]::Max(0, $lastCmd.Duration.TotalMilliseconds)
+        } elseif ($lastCmd.PSObject.Properties['EndExecutionTime'] -and
+                  $null -ne $lastCmd.EndExecutionTime -and
+                  $null -ne $lastCmd.StartExecutionTime) {
+            [Math]::Max(0, ($lastCmd.EndExecutionTime - $lastCmd.StartExecutionTime).TotalMilliseconds)
+        } else { 0 }
+        # PS7+ exposes WorkingDirectory; fall back to current location
+        $cwd = if ($lastCmd.PSObject.Properties['WorkingDirectory'] -and $lastCmd.WorkingDirectory) {
+            $lastCmd.WorkingDirectory
+        } else { $PWD.Path }
+        & $ocBin collector shell push --command "$cmd" --exit-code $exit --duration-ms $([long]$dur) --cwd $cwd --sensitivity $sensitivity 2>$null | Out-Null
     }
 
     & $script:_oc_orig_prompt
 }
-`)
-	return b.String()
+`, ocBin, sensitivity, ocBin, sensitivity)
 }
 
 func appendPwshProfile(home, hooksDir string) {
-	profilePath := filepath.Join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
-	if err := os.MkdirAll(filepath.Dir(profilePath), 0o755); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not create PowerShell profile directory: %v\n", err)
-		return
+	hookLine := fmt.Sprintf("\n# OpenContext shell collector\n. %s\n", filepath.Join(hooksDir, "hooks.ps1"))
+	// Write to both PowerShell 7+ (pwsh) and PowerShell 5.1 (powershell.exe) profiles.
+	profiles := []string{
+		filepath.Join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+		filepath.Join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
 	}
-	marker := "hooks.ps1"
-	if data, err := os.ReadFile(profilePath); err == nil && strings.Contains(string(data), marker) {
-		return
+	for _, profilePath := range profiles {
+		if err := os.MkdirAll(filepath.Dir(profilePath), 0o755); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not create PowerShell profile directory: %v\n", err)
+			continue
+		}
+		if data, err := os.ReadFile(profilePath); err == nil && strings.Contains(string(data), "hooks.ps1") {
+			continue
+		}
+		f, err := os.OpenFile(profilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not update PowerShell profile %s: %v\n", profilePath, err)
+			continue
+		}
+		_, _ = f.WriteString(hookLine)
+		f.Close()
 	}
-	f, err := os.OpenFile(profilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not update PowerShell profile: %v\n", err)
-		return
-	}
-	defer f.Close()
-	_, _ = f.WriteString(fmt.Sprintf("\n# OpenContext shell collector\n. %s\n", filepath.Join(hooksDir, "hooks.ps1")))
 }

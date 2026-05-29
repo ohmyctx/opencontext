@@ -153,90 +153,11 @@ func computeRelativeToClaudeMD(claudeMD, memoryPath string) string {
 }
 
 func (r *RawDumpRunner) queryEvents(ctx context.Context, sub *subscription.Subscription, since int64, limit int) ([]*event.ActivityEvent, error) {
-	// System-level sources that don't have per-project semantics
-	isSystemSource := func(s event.Source) bool {
-		return s == event.SourceOS || s == event.SourceBrowser ||
-			s == event.SourceClaude || s == event.SourceCodex ||
-			s == event.SourceCursor || s == event.SourceOpenCode
-	}
-
-	// Check if all sources are system-level
-	allSourcesSystem := len(sub.Filter.Sources) > 0
-	for _, src := range sub.Filter.Sources {
-		if !isSystemSource(src) {
-			allSourcesSystem = false
-			break
-		}
-	}
-
-	if len(sub.Filter.Projects) > 0 {
-		var all []*event.ActivityEvent
-		perProjectLimit := limit / len(sub.Filter.Projects)
-		if perProjectLimit < 20 {
-			perProjectLimit = 20
-		}
-
-		// Query per-project events for non-system sources
-		hasNonSystemSource := !allSourcesSystem
-
-		if hasNonSystemSource {
-			for _, proj := range sub.Filter.Projects {
-				evts, err := r.store.Events.Query(ctx, &event.QueryRequest{
-					Project:        proj,
-					Since:          since,
-					MaxSensitivity: sub.MaxSensitivity(),
-					Limit:          perProjectLimit,
-				})
-				if err != nil {
-					return nil, err
-				}
-				all = append(all, evts...)
-			}
-		}
-
-		// Also query system-level events — filtered by the system sources
-		// that are actually in the subscription's source list.
-		if len(sub.Filter.Sources) == 0 {
-			// No explicit sources configured — query all events (no filter)
-			evts, err := r.store.Events.Query(ctx, &event.QueryRequest{
-				Since:          since,
-				MaxSensitivity: sub.MaxSensitivity(),
-				Limit:          limit,
-			})
-			if err != nil {
-				return nil, err
-			}
-			all = append(all, evts...)
-		} else if isSystemSource(event.SourceOS) {
-			// Explicit sources contain system-level ones — query each
-			for _, sysSrc := range sub.Filter.Sources {
-				if !isSystemSource(sysSrc) {
-					continue
-				}
-				evts, err := r.store.Events.Query(ctx, &event.QueryRequest{
-					Source:         sysSrc,
-					Since:          since,
-					MaxSensitivity: sub.MaxSensitivity(),
-					Limit:          limit/len(sub.Filter.Sources) + 1,
-				})
-				if err != nil {
-					return nil, err
-				}
-				all = append(all, evts...)
-			}
-		}
-
-		sort.Slice(all, func(i, j int) bool { return all[i].Ts < all[j].Ts })
-		if len(all) > limit {
-			all = all[len(all)-limit:]
-		}
-		return all, nil
-	}
-
 	return r.store.Events.Query(ctx, &event.QueryRequest{
 		Since:          since,
 		MaxSensitivity: sub.MaxSensitivity(),
 		Limit:          limit,
+		LabelSelectors: sub.Filter.LabelSelectors,
 	})
 }
 
@@ -247,10 +168,8 @@ func renderRawDump(sub *subscription.Subscription, events []*event.ActivityEvent
 	now := time.Now()
 
 	projectLabel := sub.Name
-	if len(sub.Filter.Projects) == 1 {
-		projectLabel = sub.Filter.Projects[0]
-	} else if len(sub.Filter.Projects) > 1 {
-		projectLabel = strings.Join(sub.Filter.Projects, ", ")
+	if project, ok := sub.Filter.LabelSelectors["project"]; ok {
+		projectLabel = project
 	}
 
 	sb.WriteString("# OpenContext: Activity Memory\n\n")

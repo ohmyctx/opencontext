@@ -155,7 +155,8 @@ type PushResponse struct {
 // QueryRequest holds parameters for event queries.
 type QueryRequest struct {
 	Source         Source
-	Project        string
+	Project        string              // deprecated: use LabelSelectors instead
+	LabelSelectors map[string]string   // key=value pairs; event must match all
 	Since          int64 // Unix ms
 	Until          int64 // Unix ms (0 = now)
 	MaxSensitivity SensitivityLevel

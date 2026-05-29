@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -72,7 +73,8 @@ func startPruner(ctx context.Context, es store.EventStore, retentionDays int, lo
 // on its configured refresh interval. Each subscription gets its own derived
 // context so it can be stopped independently on config reload.
 // Call cancelAll() before starting a new scheduler to stop all running goroutines.
-func startRawDumpScheduler(ctx context.Context, subs []subscription.Subscription, s *store.Store, cancelFns map[string]context.CancelFunc, log *slog.Logger) {
+// mu protects cancelFns against concurrent access from the reload goroutine.
+func startRawDumpScheduler(ctx context.Context, subs []subscription.Subscription, s *store.Store, mu *sync.Mutex, cancelFns map[string]context.CancelFunc, log *slog.Logger) {
 	runner := compiler.NewRawDumpRunner(s, log)
 
 	for i := range subs {
@@ -82,7 +84,9 @@ func startRawDumpScheduler(ctx context.Context, subs []subscription.Subscription
 		}
 
 		subCtx, cancel := context.WithCancel(ctx)
+		mu.Lock()
 		cancelFns[sub.Name] = cancel
+		mu.Unlock()
 
 		interval := sub.EffectiveRefreshInterval()
 		log.Info("raw_dump scheduler started", "subscription", sub.Name, "interval", interval)
@@ -139,12 +143,21 @@ func watchConfigFile(ctx context.Context, configFile string, onReload func(*subs
 			log.Warn("config file watcher error", "err", err)
 		case event := <-watcher.Events:
 			if filepath.Base(event.Name) == filepath.Base(configFile) {
+				if !debounce.Stop() {
+					select {
+					case <-debounce.C:
+					default:
+					}
+				}
 				debounce.Reset(debounceDelay)
 			}
 		case <-debounce.C:
 			newCfg, err := subscription.ReloadFromPath(configFile)
 			if err != nil {
 				log.Warn("config reload failed", "err", err)
+				continue
+			}
+			if newCfg == nil {
 				continue
 			}
 			onReload(newCfg)
@@ -241,26 +254,29 @@ func Run(opts Options) error {
 	defer stop()
 
 	// Subscription cancel funcs — cancel all on reload to stop old scheduler goroutines
+	var subMu sync.Mutex
 	subCancelFns := make(map[string]context.CancelFunc)
-	startRawDumpScheduler(ctx, cfg.Subscriptions, s, subCancelFns, log)
+	startRawDumpScheduler(ctx, cfg.Subscriptions, s, &subMu, subCancelFns, log)
 
 	// Start config file watcher for hot reload
 	if cfg.ConfigFile != "" {
 		go watchConfigFile(ctx, cfg.ConfigFile, func(newCfg *subscription.Config) {
 			log.Info("config changed, reloading", "file", newCfg.ConfigFile)
 			// Cancel all running subscription schedulers
+			subMu.Lock()
 			for name, cancel := range subCancelFns {
 				cancel()
 				delete(subCancelFns, name)
 				log.Info("stopped subscription scheduler", "subscription", name)
 			}
+			subMu.Unlock()
 			// Rebuild compiler with new subscriptions
 			if err := comp.BuildFromConfig(newCfg.Subscriptions); err != nil {
 				log.Error("build compiler from new config", "err", err)
 				return
 			}
 			// Restart raw dump schedulers with new subscriptions
-			startRawDumpScheduler(ctx, newCfg.Subscriptions, s, subCancelFns, log)
+			startRawDumpScheduler(ctx, newCfg.Subscriptions, s, &subMu, subCancelFns, log)
 			log.Info("config reload complete")
 		}, log)
 	}

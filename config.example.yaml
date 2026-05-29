@@ -37,15 +37,17 @@ retention_days: 90
 # 一条订阅决定哪些事件成为记忆，以及记忆写入到哪里。
 
 subscriptions:
-  # ── Example 1: Global memory — all projects, all configured sources
-  # 示例 1：全局记忆 — 所有项目，所有配置的来源 ─────────────────────────────
+  # ── Example 1: Global memory — all events, all sources
+  # 示例 1：全局记忆 — 所有事件，所有来源 ───────────────────────────────────
   - name: "global"
     # filter: Controls which events are included in this subscription.
     # 过滤器：控制此订阅包含哪些事件。
     filter:
-      # projects: Empty = all projects. Set project names to scope to specific repos.
-      # 项目：空 = 所有项目。设置项目名称以限定到特定代码库。
-      projects: []
+      # label_selectors: Key-value pairs to filter events by their labels.
+      #                 The event must have all specified key=value pairs.
+      # 标签选择器：按事件标签过滤的键值对。事件必须匹配所有指定的键值对。
+      # label_selectors:
+      #   project: "my-project"   # only events with label project=my-project
       # sources: Event sources to capture. Empty = all sources.
       # 来源：要捕获的事件来源。空 = 所有来源。
       sources: ["shell", "claude", "codex", "cursor", "opencode"]
@@ -80,11 +82,12 @@ subscriptions:
     # 刷新间隔：raw_dump 自动编译间隔，单位秒（默认300，最小10）。
     refresh_interval: 300
 
-  # ── Example 2: Project-specific memory — scoped to one repository
-  # 示例 2：项目级记忆 — 限定到特定代码库 ─────────────────────────────────────
+  # ── Example 2: Project-specific memory — filtered by project label
+  # 示例 2：项目级记忆 — 按 project 标签过滤 ─────────────────────────────────
   # - name: "my-project"
   #   filter:
-  #     projects: ["my-project"]
+  #     label_selectors:
+  #       project: "my-project"   # only events with label project=my-project
   #     sources: ["shell", "claude", "codex", "cursor", "opencode", "browser"]
   #     max_sensitivity: 2
   #   memory:
@@ -123,7 +126,7 @@ subscriptions:
 #
 # Subscription fields:
 #   name           string   Unique subscription name
-#   filter.projects        []string  Project name filter (empty=all)
+#   filter.label_selectors map[string]string  Label key-value pairs (event must match all)
 #   filter.sources         []string  Source name filter (empty=all)
 #   filter.max_sensitivity int      Per-subscription sensitivity cap
 #   memory.backend        string   "raw_dump" or "file"
