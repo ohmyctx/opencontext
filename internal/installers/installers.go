@@ -170,19 +170,24 @@ func InstallShell(sensitivity int) error {
 	}
 	zshHook := shellHookZsh(ocBin, sensitivity)
 	bashHook := shellHookBash(ocBin, sensitivity)
+	pwshHook := shellHookPwsh(ocBin, sensitivity)
 	if err := os.WriteFile(filepath.Join(hooksDir, "hooks.zsh"), []byte(zshHook), 0o644); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(hooksDir, "hooks.bash"), []byte(bashHook), 0o644); err != nil {
 		return err
 	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "hooks.ps1"), []byte(pwshHook), 0o644); err != nil {
+		return err
+	}
 	appendIfMissing(filepath.Join(home, ".zshrc"), "\n# OpenContext shell collector\nsource ~/.opencontext/collectors/shell/hooks.zsh\n", "hooks.zsh")
 	appendIfMissing(filepath.Join(home, ".bashrc"), "\n# OpenContext shell collector\nsource ~/.opencontext/collectors/shell/hooks.bash\n", "hooks.bash")
+	appendPwshProfile(home, hooksDir)
 
 	shell := detectShell()
 	fmt.Println("Shell hooks installed.")
 	fmt.Printf("  hooks dir:   %s\n", hooksDir)
-	fmt.Printf("  shell:       %s (zsh and bash configs were checked)\n", shell)
+	fmt.Printf("  shell:       %s\n", shell)
 	fmt.Printf("  sensitivity: L%d\n", sensitivity)
 	fmt.Println("\nRestart your shell or source your shell config.")
 	return nil
@@ -385,4 +390,68 @@ _oc_precmd() {
 trap '_oc_preexec "$BASH_COMMAND"' DEBUG
 PROMPT_COMMAND="_oc_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 `, ocBin, sensitivity, ocBin, sensitivity)
+}
+
+func shellHookPwsh(ocBin string, sensitivity int) string {
+	var b strings.Builder
+	b.WriteString(`# OpenContext PowerShell hooks — installed by: oc collector shell install
+# oc binary: `)
+	b.WriteString(ocBin)
+	b.WriteString(`  sensitivity: `)
+	b.WriteString(fmt.Sprintf("%d", sensitivity))
+	b.WriteString(`
+
+$ocBin = "` + ocBin + `"
+$sensitivity = ` + fmt.Sprintf("%d", sensitivity) + `
+
+function global:_oc_prompt_start {
+  $script:_oc_cmd_start = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+  $script:_oc_cmd_input = ""
+}
+
+function global:_oc_prompt_done([int]$exitCode) {
+  if (-not $script:_oc_cmd_input) { return }
+  $end = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+  $dur = $end - ($script:_oc_cmd_start ?? $end)
+  $cwd = $PWD.Path
+  $cmd = $script:_oc_cmd_input
+  $script:_oc_cmd_input = $null
+  if ($cmd.TrimStart() -match '^(clear|reset|ls|ll|la|pwd|cd|history|exit)') { return }
+  Start-Process -FilePath $ocBin -ArgumentList "collector","shell","push","--command",$cmd,"--exit-code","$exitCode","--duration-ms","$dur","--cwd",$cwd,"--sensitivity","$sensitivity" -NoNewWindow -WindowStyle Hidden 2>$null | Out-Null
+}
+
+if (Get-Command prompt -ErrorAction SilentlyContinue) {
+  $script:_oc_orig_prompt = (Get-Command prompt).ScriptBlock
+} else {
+  $script:_oc_orig_prompt = { param() "PS $PWD> " }
+}
+
+function global:prompt {
+  $exit = $LASTEXITCODE ?? 0
+  _oc_prompt_done $exit
+  $result = & $script:_oc_orig_prompt
+  _oc_prompt_start
+  return $result
+}
+`)
+	return b.String()
+}
+
+func appendPwshProfile(home, hooksDir string) {
+	profilePath := filepath.Join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")
+	if err := os.MkdirAll(filepath.Dir(profilePath), 0o755); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not create PowerShell profile directory: %v\n", err)
+		return
+	}
+	marker := "hooks.ps1"
+	if data, err := os.ReadFile(profilePath); err == nil && strings.Contains(string(data), marker) {
+		return
+	}
+	f, err := os.OpenFile(profilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not update PowerShell profile: %v\n", err)
+		return
+	}
+	defer f.Close()
+	_, _ = f.WriteString(fmt.Sprintf("\n# OpenContext shell collector\n. %s\n", filepath.Join(hooksDir, "hooks.ps1")))
 }
