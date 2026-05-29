@@ -1,6 +1,6 @@
 {
   "name": "@ohmyctx/opencontext",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local-first work context daemon and CLI for AI agents",
   "keywords": [
     "opencontext",
