@@ -69,14 +69,14 @@ type Subscription struct {
 	Filter          Filter       `mapstructure:"filter"`
 	Memory          MemoryConfig `mapstructure:"memory"`
 	Schedule        string       `mapstructure:"schedule"`         // cron expression (for LLM compile)
-	RefreshInterval int          `mapstructure:"refresh_interval"` // seconds; for raw_dump auto-refresh (default 30)
+	RefreshInterval int          `mapstructure:"refresh_interval"` // seconds; for raw_dump auto-refresh (default 300, min 10)
 	LLM             *LLMConfig   `mapstructure:"llm"`
 }
 
-// EffectiveRefreshInterval returns the refresh interval in seconds, defaulting to 30.
+// EffectiveRefreshInterval returns the refresh interval in seconds, defaulting to 300 (5 min).
 func (s *Subscription) EffectiveRefreshInterval() time.Duration {
 	if s.RefreshInterval <= 0 {
-		return 30 * time.Second
+		return 300 * time.Second
 	}
 	return time.Duration(s.RefreshInterval) * time.Second
 }

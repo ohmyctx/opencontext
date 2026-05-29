@@ -76,9 +76,9 @@ subscriptions:
       # inject_targets:
       #   - path: "~/.hermes/memories/MEMORY.md"
       #     header: "## OpenContext Recent Activity"
-    # refresh_interval: Seconds between raw_dump auto-compiles (default 30, min 10).
-    # 刷新间隔：raw_dump 自动编译间隔，单位秒（默认30，最小10）。
-    refresh_interval: 1800
+    # refresh_interval: Seconds between raw_dump auto-compiles (default 300, min 10).
+    # 刷新间隔：raw_dump 自动编译间隔，单位秒（默认300，最小10）。
+    refresh_interval: 300
 
   # ── Example 2: Project-specific memory — scoped to one repository
   # 示例 2：项目级记忆 — 限定到特定代码库 ─────────────────────────────────────
@@ -91,7 +91,7 @@ subscriptions:
   #     backend: "raw_dump"
   #     path: "/path/to/my-project/.opencontext/memory.md"
   #     claude_md: "/path/to/my-project/CLAUDE.md"
-  #   refresh_interval: 1800
+  #   refresh_interval: 300
 
   # ── Example 3: LLM summarization — requires LLM config below
   # 示例 3：LLM 总结模式 — 需要下方 LLM 配置 ──────────────────────────────────

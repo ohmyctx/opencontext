@@ -266,7 +266,7 @@ subscriptions:
     memory:
       backend: "raw_dump"
       path: "~/.opencontext/memory.md"
-    refresh_interval: 1800
+    refresh_interval: 300
 ```
 
 Remove any sources the user did not choose.
@@ -286,7 +286,7 @@ subscriptions:
     memory:
       backend: "raw_dump"
       path: "<absolute-project-path>/.opencontext/memory.md"
-    refresh_interval: 1800
+    refresh_interval: 300
 ```
 
 Replace:
@@ -389,7 +389,7 @@ subscriptions:
           header: "## OpenContext Recent Activity"
         - path: "~/.openclaw/workspace/MEMORY.md"
           header: "## OpenContext Recent Activity"
-    refresh_interval: 1800
+    refresh_interval: 300
 ```
 
 ## Compile And Verify

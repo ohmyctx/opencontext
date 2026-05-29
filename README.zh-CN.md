@@ -133,7 +133,7 @@ subscriptions:
     memory:
       backend: "raw_dump"
       path: "~/.opencontext/memory.md"
-    refresh_interval: 1800
+    refresh_interval: 300
 ```
 
 编译一次并验证：
