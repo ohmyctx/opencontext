@@ -20,7 +20,7 @@ Recommended default: install only the collectors for tools the user actually use
 
 | Collector | Install command | Use when |
 |---|---|---|
-| Shell | `oc collector shell install` | user wants terminal command activity |
+| Shell | `oc collector shell install` | zsh/bash on Linux/macOS, PowerShell on Windows |
 | Claude Code | `oc collector claude install` | user uses Claude Code locally |
 | Codex | `oc collector codex install` | user uses Codex CLI |
 | Cursor | `oc collector cursor install` | user uses Cursor hooks |
@@ -182,6 +182,8 @@ oc collector cursor install
 oc collector opencode install
 ```
 
+**For Windows users:** The shell collector installs PowerShell hooks automatically (no bash/zsh on Windows). PowerShell 5.1+ is required. After install, open a new PowerShell window — the hook loads via the profile and commands will be captured.
+
 If the user selected Chrome browser and has Chrome installed, prepare the unpacked extension:
 
 ```bash
@@ -223,13 +225,13 @@ docs/COLLECTOR_INSTALL.md
 
 Then follow the platform-specific instructions in that guide.
 
-After shell collector install, reload the shell:
+After shell collector install, reload the shell (or open a new window):
 
 ```bash
-source ~/.zshrc
+source ~/.zshrc        # zsh
+source ~/.bashrc       # bash
+# Windows: just open a new PowerShell window (profile auto-loads hooks)
 ```
-
-If the user uses bash, reload `~/.bashrc` instead.
 
 ## Configure Subscriptions
 

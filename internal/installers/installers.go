@@ -404,34 +404,31 @@ func shellHookPwsh(ocBin string, sensitivity int) string {
 $ocBin = "` + ocBin + `"
 $sensitivity = ` + fmt.Sprintf("%d", sensitivity) + `
 
-function global:_oc_prompt_start {
-  $script:_oc_cmd_start = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-  $script:_oc_cmd_input = ""
-}
-
-function global:_oc_prompt_done([int]$exitCode) {
-  if (-not $script:_oc_cmd_input) { return }
-  $end = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-  $dur = $end - ($script:_oc_cmd_start ?? $end)
-  $cwd = $PWD.Path
-  $cmd = $script:_oc_cmd_input
-  $script:_oc_cmd_input = $null
-  if ($cmd.TrimStart() -match '^(clear|reset|ls|ll|la|pwd|cd|history|exit)') { return }
-  Start-Process -FilePath $ocBin -ArgumentList "collector","shell","push","--command",$cmd,"--exit-code","$exitCode","--duration-ms","$dur","--cwd",$cwd,"--sensitivity","$sensitivity" -NoNewWindow -WindowStyle Hidden 2>$null | Out-Null
-}
-
-if (Get-Command prompt -ErrorAction SilentlyContinue) {
-  $script:_oc_orig_prompt = (Get-Command prompt).ScriptBlock
+$script:_oc_last_hist_id = -1
+$script:_oc_orig_prompt = if (Get-Command prompt -ErrorAction SilentlyContinue) {
+    (Get-Command prompt).ScriptBlock
 } else {
-  $script:_oc_orig_prompt = { param() "PS $PWD> " }
+    { param() "PS $PWD> " }
 }
 
 function global:prompt {
-  $exit = $LASTEXITCODE ?? 0
-  _oc_prompt_done $exit
-  $result = & $script:_oc_orig_prompt
-  _oc_prompt_start
-  return $result
+    $exit = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }
+
+    try {
+        $lastCmd = Get-History -ErrorAction Stop | Select-Object -Last 1
+    } catch {
+        $lastCmd = $null
+    }
+
+    if ($lastCmd -and $lastCmd.Id -gt $script:_oc_last_hist_id) {
+        $script:_oc_last_hist_id = $lastCmd.Id
+        $cmd = $lastCmd.CommandLine
+        $dur = [Math]::Max(0, $lastCmd.Duration.TotalMilliseconds)
+        $cwd = if ($lastCmd.WorkingDirectory) { $lastCmd.WorkingDirectory } else { $PWD.Path }
+        & $ocBin collector shell push --command $cmd --exit-code $exit --duration-ms $([int]$dur) --cwd $cwd --sensitivity $sensitivity 2>$null | Out-Null
+    }
+
+    & $script:_oc_orig_prompt
 }
 `)
 	return b.String()
