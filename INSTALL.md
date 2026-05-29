@@ -268,6 +268,9 @@ subscriptions:
     memory:
       backend: "raw_dump"
       path: "~/.opencontext/memory.md"
+      inject_targets:
+        - path: "~/.hermes/memories/MEMORY.md"
+          header: "## OpenContext Recent Activity"
     refresh_interval: 300
 ```
 

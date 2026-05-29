@@ -75,9 +75,9 @@ subscriptions:
       #                 Markdown memory file.
       # 注入目标：额外的文件列表，用于注入记忆片段。
       #            适用于 Hermes、OpenClaw 或任何读取 Markdown 记忆文件的 Agent。
-      # inject_targets:
-      #   - path: "~/.hermes/memories/MEMORY.md"
-      #     header: "## OpenContext Recent Activity"
+      inject_targets:
+        - path: "~/.hermes/memories/MEMORY.md"
+          header: "## OpenContext Recent Activity"
     # refresh_interval: Seconds between raw_dump auto-compiles (default 300, min 10).
     # 刷新间隔：raw_dump 自动编译间隔，单位秒（默认300，最小10）。
     refresh_interval: 300
