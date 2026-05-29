@@ -62,9 +62,9 @@ subscriptions:
       # 后端：输出格式。"raw_dump" = 近期事件直接写入 markdown（无需 LLM）。
       #      "file" = LLM 总结的记忆（需要下方 LLM 配置）。
       backend: "raw_dump"
-      # path: Absolute path (or ~/) to the output memory file.
-      # 路径：输出记忆文件的绝对路径（或 ~/）。
-      path: "~/.opencontext/memory.md"
+      # path: Absolute path to the output memory file.
+      # 路径：输出记忆文件的绝对路径。
+      path: "/root/.opencontext/memory.md"
       # claude_md: Optional path to a CLAUDE.md file. OpenContext appends an
       #           @.opencontext/memory.md reference so Claude Code picks it up.
       # claude_md：可选的 CLAUDE.md 文件路径。OpenContext 会追加
@@ -76,7 +76,7 @@ subscriptions:
       # 注入目标：额外的文件列表，用于注入记忆片段。
       #            适用于 Hermes、OpenClaw 或任何读取 Markdown 记忆文件的 Agent。
       inject_targets:
-        - path: "~/.hermes/memories/MEMORY.md"
+        - path: "/root/.hermes/memories/MEMORY.md"
           header: "## OpenContext Recent Activity"
     # refresh_interval: Seconds between raw_dump auto-compiles (default 300, min 10).
     # 刷新间隔：raw_dump 自动编译间隔，单位秒（默认300，最小10）。
@@ -104,7 +104,7 @@ subscriptions:
   #     max_sensitivity: 2
   #   memory:
   #     backend: "file"
-  #     path: "~/.opencontext/memory.md"
+  #     path: "/path/to/my-project/.opencontext/memory.md"
   #   schedule: "0 */6 * * *"   # cron: every 6 hours
   #   # LLM: OpenAI / Anthropic compatible API. Leave api_key empty to use defaults.
   #   # LLM：OpenAI / Anthropic 兼容 API。api_key 为空则使用环境变量或默认配置。

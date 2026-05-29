@@ -267,9 +267,9 @@ subscriptions:
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
-      path: "~/.opencontext/memory.md"
+      path: "/root/.opencontext/memory.md"
       inject_targets:
-        - path: "~/.hermes/memories/MEMORY.md"
+        - path: "/root/.hermes/memories/MEMORY.md"
           header: "## OpenContext Recent Activity"
     refresh_interval: 300
 ```
@@ -371,9 +371,9 @@ Or add the inject target manually:
 ```yaml
 memory:
   backend: "raw_dump"
-  path: "~/.opencontext/memory.md"
+  path: "/root/.opencontext/memory.md"
   inject_targets:
-    - path: "~/.openclaw/workspace/MEMORY.md"
+    - path: "/root/.openclaw/workspace/MEMORY.md"
       header: "## OpenContext Recent Activity"
 ```
 
@@ -389,11 +389,11 @@ subscriptions:
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
-      path: "~/.opencontext/memory.md"
+      path: "/root/.opencontext/memory.md"
       inject_targets:
-        - path: "~/.hermes/memories/MEMORY.md"
+        - path: "/root/.hermes/memories/MEMORY.md"
           header: "## OpenContext Recent Activity"
-        - path: "~/.openclaw/workspace/MEMORY.md"
+        - path: "/root/.openclaw/workspace/MEMORY.md"
           header: "## OpenContext Recent Activity"
     refresh_interval: 300
 ```
