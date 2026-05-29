@@ -21,6 +21,8 @@ const (
 	SourceCodex    Source = "codex"    // OpenAI Codex CLI
 	SourceCursor   Source = "cursor"   // Cursor IDE agent
 	SourceOpenCode Source = "opencode" // OpenCode (sst/opencode)
+	SourceHermes   Source = "hermes"   // Hermes Agent (NousResearch/hermes-agent)
+	SourceOpenClaw Source = "openclaw" // OpenClaw
 )
 
 // EventType identifies the specific activity within a Source.
@@ -45,6 +47,7 @@ const (
 	EventTypeKeyPress      EventType = "key_press"
 	EventTypeBrowserNav    EventType = "browser_nav"
 	EventTypeClipboardCopy EventType = "clipboard_copy"
+	EventTypeScreenshot    EventType = "screenshot"
 	EventTypeSystemIdle    EventType = "system_idle"
 
 	// browser
@@ -155,10 +158,10 @@ type PushResponse struct {
 // QueryRequest holds parameters for event queries.
 type QueryRequest struct {
 	Source         Source
-	Project        string              // deprecated: use LabelSelectors instead
-	LabelSelectors map[string]string   // key=value pairs; event must match all
-	Since          int64 // Unix ms
-	Until          int64 // Unix ms (0 = now)
+	Project        string            // deprecated: use LabelSelectors instead
+	LabelSelectors map[string]string // key=value pairs; event must match all
+	Since          int64             // Unix ms
+	Until          int64             // Unix ms (0 = now)
 	MaxSensitivity SensitivityLevel
 	Limit          int
 	Query          string // FTS5 full-text search

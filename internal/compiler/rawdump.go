@@ -16,6 +16,8 @@ import (
 	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
+const cursorMDCFilename = "opencontext-memory.mdc"
+
 // RawDumpRunner writes recent raw events directly to a memory.md file without
 // LLM summarization. The agent reading the file (Claude Code, Cursor, etc.) is
 // already an LLM and can interpret the structured events directly.
@@ -57,10 +59,32 @@ func (r *RawDumpRunner) Run(ctx context.Context, sub *subscription.Subscription)
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 
-	// If claude_md is configured, append @reference to CLAUDE.md if not already present.
+	// Inject memory section directly into CLAUDE.md (Claude Code).
 	if sub.Memory.ClaudeMD != "" {
-		if err := appendClaudeLink(sub.Memory.ClaudeMD, sub.Memory.Path); err != nil {
-			r.log.Warn("failed to append claude link", "claude_md", sub.Memory.ClaudeMD, "err", err)
+		target := injector.InjectTarget{Path: sub.Memory.ClaudeMD, Header: "## OpenContext — Recent Activity"}
+		if err := injector.Inject(target, md); err != nil {
+			r.log.Warn("claude_md inject failed", "path", sub.Memory.ClaudeMD, "err", err)
+		} else {
+			r.log.Debug("injected memory into CLAUDE.md", "path", sub.Memory.ClaudeMD)
+		}
+	}
+
+	// Inject memory section directly into AGENTS.md (Codex, OpenCode).
+	if sub.Memory.AgentsMD != "" {
+		target := injector.InjectTarget{Path: sub.Memory.AgentsMD, Header: "## OpenContext — Recent Activity"}
+		if err := injector.Inject(target, md); err != nil {
+			r.log.Warn("agents_md inject failed", "path", sub.Memory.AgentsMD, "err", err)
+		} else {
+			r.log.Debug("injected memory into AGENTS.md", "path", sub.Memory.AgentsMD)
+		}
+	}
+
+	// Write a dedicated Cursor rule file into the configured .cursor/rules/ directory.
+	if sub.Memory.CursorRulesDir != "" {
+		if err := writeCursorRuleFile(sub.Memory.CursorRulesDir, md); err != nil {
+			r.log.Warn("cursor_rules_dir write failed", "dir", sub.Memory.CursorRulesDir, "err", err)
+		} else {
+			r.log.Debug("wrote cursor rule file", "dir", sub.Memory.CursorRulesDir)
 		}
 	}
 
@@ -81,76 +105,22 @@ func (r *RawDumpRunner) Run(ctx context.Context, sub *subscription.Subscription)
 	return nil
 }
 
-// appendClaudeLink appends @memoryRef to claudeMD if the line doesn't already exist.
-// claudeMD is the path to CLAUDE.md (e.g., /path/to/CLAUDE.md)
-// memoryPath is the absolute path to the memory file (e.g., /path/to/.opencontext/memory.md)
-func appendClaudeLink(claudeMD, memoryPath string) error {
-	// Compute @-style path relative to CLAUDE.md directory
-	// e.g., /path/to/CLAUDE.md and /path/to/.opencontext/memory.md -> @.opencontext/memory.md
-	// Note: rel is like ".opencontext/memory.md" (with leading dot as part of dir name)
-	rel := computeRelativeToClaudeMD(claudeMD, memoryPath)
-	ref := "@" + rel // "@" + ".opencontext/memory.md" = "@.opencontext/memory.md"
-
-	// Read existing CLAUDE.md
-	content, err := os.ReadFile(claudeMD)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("read CLAUDE.md: %w", err)
+// writeCursorRuleFile writes a Cursor .mdc rule file containing the memory
+// content into dir/opencontext-memory.mdc. OpenContext fully owns this file
+// and overwrites it on every compile.
+func writeCursorRuleFile(dir, content string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create cursor rules dir %s: %w", dir, err)
 	}
-
-	// Check if reference already exists
-	if os.IsNotExist(err) {
-		content = []byte{}
-	} else {
-		// Split into lines and check each
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == ref || line == ref+")" {
-				// Already present
-				return nil
-			}
-		}
+	// Cursor .mdc frontmatter: alwaysApply ensures the rule is always loaded.
+	mdc := "---\ndescription: OpenContext recent activity context\nalwaysApply: true\n---\n\n" + content
+	path := filepath.Join(dir, cursorMDCFilename)
+	if err := os.WriteFile(path, []byte(mdc), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
 	}
-
-	// Append the reference
-	f, err := os.OpenFile(claudeMD, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return fmt.Errorf("open CLAUDE.md: %w", err)
-	}
-	defer f.Close()
-
-	// Add newline if file doesn't end with one
-	if len(content) > 0 && content[len(content)-1] != '\n' {
-		if _, err := f.WriteString("\n"); err != nil {
-			return err
-		}
-	}
-
-	// Append the @ reference as a comment explaining its purpose
-	if _, err := f.WriteString("\n" + ref + "  \n"); err != nil {
-		return fmt.Errorf("write @ reference: %w", err)
-	}
-
 	return nil
 }
 
-// computeRelativeToClaudeMD computes the relative path from the CLAUDE.md directory
-// to the memory file, for use in @-style references.
-// claudeMD: /path/to/CLAUDE.md
-// memoryPath: /path/to/.opencontext/memory.md
-// Returns: .opencontext/memory.md (caller prepends @)
-func computeRelativeToClaudeMD(claudeMD, memoryPath string) string {
-	claDir := filepath.Dir(claudeMD)
-	rel, err := filepath.Rel(claDir, memoryPath)
-	if err != nil {
-		// Fallback: just use the memory filename
-		return filepath.Base(memoryPath)
-	}
-	// rel is like ".opencontext/memory.md" - the leading dot is part of the directory name
-	// Strip leading "./" if present (e.g., "../../other/.opencontext/memory.md")
-	rel = strings.TrimPrefix(rel, "./")
-	return rel
-}
 
 func (r *RawDumpRunner) queryEvents(ctx context.Context, sub *subscription.Subscription, since int64, limit int) ([]*event.ActivityEvent, error) {
 	return r.store.Events.Query(ctx, &event.QueryRequest{

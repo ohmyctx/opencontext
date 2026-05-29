@@ -156,6 +156,29 @@ Do not rely on SSH for permission verification (`verified: false` is expected).
 
 Clipboard events are `sensitivity: 3`. If they are visible with `oc events --source os --max-sensitivity 3` but absent from generated memory, update the selected subscription's `filter.max_sensitivity` to `3` only after the user explicitly agrees to L3 capture.
 
+Configuration should live at:
+
+```text
+~/.config/opencontext/collectors/macos.yaml
+```
+
+The legacy `~/.opencontext/mac-collector.yaml` path is still supported.
+
+Screenshot capture is L3 and off by default. When enabled, the collector stores images locally and reports only `payload.path`:
+
+```yaml
+collect_screenshots: false
+screenshot_interval_secs: 300
+screenshot_dir: "~/Library/Application Support/OpenContext/screenshots/macos"
+screenshot_max_width: 1440
+screenshot_format: "jpg"
+screenshot_retention_days: 3
+screenshot_max_total_mb: 1024
+```
+
+macOS screenshots require Screen Recording permission for `OpenContextCollector.app`.
+Accessibility permission is not enough for screenshots.
+
 ### Run In Foreground
 
 ```bash
@@ -253,6 +276,28 @@ install.bat
 ```
 
 This installs Python dependencies from `requirements.txt`.
+
+Configuration should live at:
+
+```text
+%APPDATA%\OpenContext\collectors\windows.yaml
+```
+
+The legacy `%USERPROFILE%\.opencontext\windows-collector.yaml` path is still supported.
+
+Screenshot capture is L3 and off by default. When enabled, the collector stores images locally and reports only `payload.path`:
+
+```yaml
+collect_screenshots: false
+screenshot_interval_secs: 300
+screenshot_dir: "%LOCALAPPDATA%\\OpenContext\\screenshots\\windows"
+screenshot_max_width: 1440
+screenshot_format: "jpg"
+screenshot_retention_days: 3
+screenshot_max_total_mb: 1024
+```
+
+For the full configuration policy, see `docs/COLLECTOR_CONFIG.md`.
 
 ### Run In Foreground
 

@@ -11,6 +11,7 @@
 | 文本输入提交 | `os` | `text_input` | L2 | 输入框内容（Enter/Tab 触发），跳过密码框 |
 | 进程启动 | `os` | `app_launch` | L1 | 程序名、可执行路径 |
 | 剪贴板复制 | `os` | `clipboard_copy` | **L3** | 文本、文件列表或图片元数据 |
+| 屏幕截图 | `os` | `screenshot` | **L3** | 本地图片路径，不上传图片内容 |
 | 按键（可选） | `os` | `key_press` | **L3** | 单个按键名，需显式开启，永远跳过密码框 |
 
 剪贴板是 L3。只有在用户明确同意 L3 后，才把订阅的 `max_sensitivity` 调到 `3`。
@@ -64,7 +65,9 @@ python collector.py [选项]
 
 ## 配置文件
 
-配置文件位置：`%USERPROFILE%\.opencontext\windows-collector.yaml`
+推荐配置文件位置：`%APPDATA%\OpenContext\collectors\windows.yaml`
+
+旧路径仍兼容：`%USERPROFILE%\.opencontext\windows-collector.yaml`
 
 ```yaml
 # OpenContext daemon 地址
@@ -90,6 +93,18 @@ collect_raw_keys: false
 
 # 捕获剪贴板 —— L3
 collect_clipboard: true
+
+# 周期截图 —— L3，默认关闭。事件只上报本地图片路径，不上传图片内容。
+collect_screenshots: false
+screenshot_interval_secs: 300
+screenshot_dir: "%LOCALAPPDATA%\\OpenContext\\screenshots\\windows"
+screenshot_max_width: 1440
+screenshot_format: "jpg"
+screenshot_retention_days: 3
+screenshot_max_total_mb: 1024
+
+# 截图文件只保存在本机，事件里只包含 payload.path。
+# agent 可以在需要视觉上下文时再读取该路径。
 
 # 完全忽略的 App（exe 名称）
 ignore_apps:

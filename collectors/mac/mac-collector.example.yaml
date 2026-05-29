@@ -1,5 +1,8 @@
 # macOS OpenContext Collector — example configuration
-# Copy to ~/.opencontext/mac-collector.yaml and edit as needed.
+# Preferred path:
+#   ~/.config/opencontext/collectors/macos.yaml
+# Legacy path still supported:
+#   ~/.opencontext/mac-collector.yaml
 
 # OpenContext daemon endpoint (default: localhost)
 daemon_url: "http://localhost:6060"
@@ -15,6 +18,16 @@ collect_raw_keys: false
 
 # Monitor clipboard (text, files, image metadata)
 collect_clipboard: true
+
+# Periodic screenshots are L3 and are disabled by default.
+# Events only contain a local file path; image bytes are not uploaded.
+collect_screenshots: false
+screenshot_interval_secs: 300
+screenshot_dir: "~/Library/Application Support/OpenContext/screenshots/macos"
+screenshot_max_width: 1440
+screenshot_format: "jpg"
+screenshot_retention_days: 3
+screenshot_max_total_mb: 1024
 
 # Ignore specific apps by name or bundle ID substring
 # ignore_apps:

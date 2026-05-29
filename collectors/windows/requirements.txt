@@ -4,3 +4,4 @@ pynput>=1.7.6
 psutil>=5.9.0
 requests>=2.31.0
 pyyaml>=6.0.1
+pillow>=10.0.0

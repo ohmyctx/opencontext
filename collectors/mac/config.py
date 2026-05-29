@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 from typing import List
 
@@ -11,7 +12,10 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_PATH = Path.home() / ".opencontext" / "mac-collector.yaml"
+CONFIG_ENV = "OPENCONTEXT_MAC_COLLECTOR_CONFIG"
+DEFAULT_CONFIG_PATH = Path.home() / ".config" / "opencontext" / "collectors" / "macos.yaml"
+LEGACY_CONFIG_PATH = Path.home() / ".opencontext" / "mac-collector.yaml"
+DEFAULT_SCREENSHOT_DIR = Path.home() / "Library" / "Application Support" / "OpenContext" / "screenshots" / "macos"
 
 
 @dataclass
@@ -37,6 +41,15 @@ class Config:
     # Capture clipboard content on copy; on by default for personal monitoring
     collect_clipboard: bool = True
 
+    # Capture periodic screenshots. Sensitive L3, off by default.
+    collect_screenshots: bool = False
+    screenshot_interval_secs: float = 300.0
+    screenshot_dir: str = str(DEFAULT_SCREENSHOT_DIR)
+    screenshot_max_width: int = 1440
+    screenshot_format: str = "jpg"
+    screenshot_retention_days: int = 3
+    screenshot_max_total_mb: int = 1024
+
     # Bundle IDs (e.g. "com.apple.finder") or app names to ignore entirely
     ignore_apps: List[str] = field(default_factory=list)
 
@@ -45,7 +58,7 @@ class Config:
 
     @classmethod
     def load(cls, path: Path | str | None = None) -> "Config":
-        config_path = Path(path) if path else DEFAULT_CONFIG_PATH
+        config_path = _resolve_config_path(path)
         if not config_path.exists():
             return cls()
         try:
@@ -69,3 +82,16 @@ class Config:
             return False
         lower = title.lower()
         return any(frag.lower() in lower for frag in self.ignore_window_titles)
+
+    def screenshot_path(self) -> Path:
+        return Path(os.path.expandvars(os.path.expanduser(self.screenshot_dir)))
+
+
+def _resolve_config_path(path: Path | str | None) -> Path:
+    if path:
+        return Path(os.path.expandvars(os.path.expanduser(str(path))))
+    if env := os.environ.get(CONFIG_ENV):
+        return Path(os.path.expandvars(os.path.expanduser(env)))
+    if DEFAULT_CONFIG_PATH.exists() or not LEGACY_CONFIG_PATH.exists():
+        return DEFAULT_CONFIG_PATH
+    return LEGACY_CONFIG_PATH

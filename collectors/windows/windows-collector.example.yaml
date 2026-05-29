@@ -1,0 +1,34 @@
+# Windows OpenContext Collector — example configuration
+# Preferred path:
+#   %APPDATA%\OpenContext\collectors\windows.yaml
+# Legacy path still supported:
+#   %USERPROFILE%\.opencontext\windows-collector.yaml
+
+daemon_url: "http://localhost:6060"
+flush_interval: 5.0
+window_poll_interval: 0.2
+process_poll_interval: 1.0
+sensitivity: 2
+
+collect_text_input: true
+collect_raw_keys: false
+collect_clipboard: true
+
+# Periodic screenshots are L3 and are disabled by default.
+# Events only contain a local file path; image bytes are not uploaded.
+collect_screenshots: false
+screenshot_interval_secs: 300
+screenshot_dir: "%LOCALAPPDATA%\\OpenContext\\screenshots\\windows"
+screenshot_max_width: 1440
+screenshot_format: "jpg"
+screenshot_retention_days: 3
+screenshot_max_total_mb: 1024
+
+ignore_apps:
+  - LockApp.exe
+  - ScreenClippingHost.exe
+
+ignore_window_titles:
+  - "密码"
+  - "Password"
+  - "登录"

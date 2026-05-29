@@ -39,7 +39,8 @@ echo   python collector.py --debug         -- verbose output
 echo   python collector.py --dry-run       -- print events, don't push
 echo   pythonw collector.py                -- run silently in background
 echo.
-echo Configuration: %%USERPROFILE%%\.opencontext\windows-collector.yaml
+echo Configuration: %%APPDATA%%\OpenContext\collectors\windows.yaml
+echo Legacy config is still supported: %%USERPROFILE%%\.opencontext\windows-collector.yaml
 echo.
 echo Make sure OpenContext daemon is running at http://localhost:6060
 echo.

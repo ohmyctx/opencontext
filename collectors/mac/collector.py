@@ -8,6 +8,7 @@ Monitors user activity on macOS and pushes structured events to the OpenContext 
   - os.text_input     — text submitted in input fields (L2)
   - os.app_launch     — new applications launched
   - os.clipboard_copy — clipboard content changes (L3)
+  - os.screenshot     — local screenshot path (L3, opt-in)
   - os.key_press      — individual keystrokes (L3, opt-in)
 
 Permissions required:
@@ -167,6 +168,7 @@ def main() -> None:
     from monitors.clipboard_monitor import ClipboardMonitor
     from monitors.keyboard_monitor import KeyboardMonitor
     from monitors.process_monitor import ProcessMonitor
+    from monitors.screenshot_monitor import ScreenshotMonitor
     from monitors.window_monitor import WindowMonitor
 
     args = parse_args()
@@ -252,6 +254,16 @@ def main() -> None:
             logger.info("clipboard monitor started (os.clipboard_copy L3)")
         except Exception as e:
             logger.error("clipboard monitor failed to start: %s", e)
+
+    # ── Screenshots ──────────────────────────────────────────────────
+    if config.collect_screenshots:
+        try:
+            sm = ScreenshotMonitor(event_queue, config)
+            sm.start()
+            started.append(sm)
+            logger.info("screenshot monitor started (os.screenshot L3)")
+        except Exception as e:
+            logger.error("screenshot monitor failed to start: %s", e)
 
     if not started:
         logger.error("no monitors could start — exiting")

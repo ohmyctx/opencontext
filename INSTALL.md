@@ -35,6 +35,14 @@ The macOS and Windows activity collectors push directly to `oc daemon` in a norm
 
 The macOS installer builds `~/Applications/OpenContextCollector.app`. Ask the user to add only that app in System Settings → Privacy & Security → Accessibility, then run `bash grant-accessibility.sh` and verify with `bash run.sh --check-permissions` on the Mac (not SSH).
 
+OS collector configuration uses platform config directories:
+
+- macOS: `~/.config/opencontext/collectors/macos.yaml`
+- Windows: `%APPDATA%\OpenContext\collectors\windows.yaml`
+
+Screenshot capture is available for macOS and Windows as `os.screenshot`, but it is L3 and disabled by default. When enabled, events contain only a local image path in `payload.path`; image bytes are not uploaded to the daemon.
+For the full collector configuration policy, read `docs/COLLECTOR_CONFIG.md`.
+
 ## Ask The User First
 
 Ask these questions before changing files:
@@ -304,50 +312,128 @@ If the user selected Chrome browser, include `"browser"` in `sources`.
 
 ## Connect Memory To Agents
 
-Choose the matching section based on the user's answer.
+OpenContext injects memory **directly into each agent's config file** using HTML comment markers:
+
+```
+<!-- opencontext:start -->
+...generated content...
+<!-- opencontext:end -->
+```
+
+Only the content between the markers is replaced on each compile. Everything else in the file is preserved.
+The injected content includes a hint for fetching older history via CLI when needed.
+
+> **Important:** `memory.path` (the canonical memory file) is auto-generated and fully overwritten on every compile. Do not edit it manually. All other agent config files (CLAUDE.md, AGENTS.md, etc.) are modified only within the markers.
+
+---
+
+### How to choose: global vs project-level
+
+| | Global | Project-level |
+|---|---|---|
+| **Memory scope** | All events, all projects | Events for one project only |
+| **Agent file** | `~/.claude/CLAUDE.md` (global Claude) | `/path/to/project/CLAUDE.md` |
+| **Filter** | No `label_selectors` | `label_selectors: {project: "..."}` |
+| **When to use** | User wants one view of all work | User wants per-project context in that project's agent |
+
+You can have both: one global subscription (for `~/.claude/CLAUDE.md`) and one or more project subscriptions (for each project's `CLAUDE.md`).
+
+---
 
 ### Claude Code
 
-For project memory, add `claude_md` to the subscription:
+Claude Code reads `CLAUDE.md` in the project directory (and all parent directories up to `~/.claude/CLAUDE.md`). Set `claude_md` to the path of the relevant file.
+
+**Global** (memory from all projects, available in every Claude session):
+
+```yaml
+subscriptions:
+  - name: "global"
+    filter:
+      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      max_sensitivity: 2
+    memory:
+      backend: "raw_dump"
+      path: "~/.opencontext/memory.md"
+      claude_md: "~/.claude/CLAUDE.md"
+    refresh_interval: 300
+```
+
+**Project-level** (memory scoped to one project, visible only when Claude runs in that project):
+
+```yaml
+subscriptions:
+  - name: "my-project"
+    filter:
+      label_selectors:
+        project: "my-project"
+      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      max_sensitivity: 2
+    memory:
+      backend: "raw_dump"
+      path: "/path/to/my-project/.opencontext/memory.md"
+      claude_md: "/path/to/my-project/CLAUDE.md"
+    refresh_interval: 300
+```
+
+---
+
+### Codex / OpenCode
+
+Codex and OpenCode read `AGENTS.md` in the current directory and parent directories. Set `agents_md` to the path of the relevant file.
+
+**Project-level** (recommended — scoped to one project):
+
+```yaml
+subscriptions:
+  - name: "my-project"
+    filter:
+      label_selectors:
+        project: "my-project"
+      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      max_sensitivity: 2
+    memory:
+      backend: "raw_dump"
+      path: "/path/to/my-project/.opencontext/memory.md"
+      agents_md: "/path/to/my-project/AGENTS.md"
+    refresh_interval: 300
+```
+
+**Global** (if using a global AGENTS.md, e.g. `~/AGENTS.md`):
 
 ```yaml
 memory:
   backend: "raw_dump"
-  path: "<absolute-project-path>/.opencontext/memory.md"
-  claude_md: "<absolute-project-path>/CLAUDE.md"
+  path: "~/.opencontext/memory.md"
+  agents_md: "~/AGENTS.md"
 ```
 
-After the next compile, OpenContext appends an `@.opencontext/memory.md` reference to `CLAUDE.md`.
+---
 
-### Cursor Or Other Project Agents
+### Cursor
 
-For agents that read project instruction files, write the generated memory path into the relevant project file.
+Cursor reads rule files from `.cursor/rules/` in the project directory. Set `cursor_rules_dir` to the rules directory path. OpenContext will write `opencontext-memory.mdc` there on every compile (this file is fully owned by OpenContext).
 
-Common choices:
+**Project-level** (recommended):
 
-```text
-<absolute-project-path>/AGENTS.md
-<absolute-project-path>/.cursor/rules/opencontext.md
-<absolute-project-path>/CLAUDE.md
+```yaml
+subscriptions:
+  - name: "my-project"
+    filter:
+      label_selectors:
+        project: "my-project"
+      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      max_sensitivity: 2
+    memory:
+      backend: "raw_dump"
+      path: "/path/to/my-project/.opencontext/memory.md"
+      cursor_rules_dir: "/path/to/my-project/.cursor/rules"
+    refresh_interval: 300
 ```
 
-Add a short reference, for example:
-
-```markdown
-Read recent work context from `.opencontext/memory.md` before answering project-continuation questions.
-```
-
-If the agent supports direct file references, use the direct reference format it expects.
+---
 
 ### Hermes
-
-Use the command:
-
-```bash
-oc inject hermes
-```
-
-Or add the inject target manually:
 
 ```yaml
 memory:
@@ -358,42 +444,41 @@ memory:
       header: "## OpenContext Recent Activity"
 ```
 
+---
+
 ### OpenClaw
-
-Use the command:
-
-```bash
-oc inject openclaw
-```
-
-Or add the inject target manually:
 
 ```yaml
 memory:
   backend: "raw_dump"
-  path: "/root/.opencontext/memory.md"
+  path: "~/.opencontext/memory.md"
   inject_targets:
-    - path: "/root/.openclaw/workspace/MEMORY.md"
+    - path: "~/.openclaw/workspace/MEMORY.md"
       header: "## OpenContext Recent Activity"
 ```
 
-### Multiple Targets
+---
 
-One subscription can write one memory file and inject into multiple targets:
+### Combining multiple agents
+
+One subscription can target multiple agents simultaneously:
 
 ```yaml
 subscriptions:
-  - name: "global"
+  - name: "my-project"
     filter:
-      sources: ["shell", "claude", "codex"]
+      label_selectors:
+        project: "my-project"
+      sources: ["shell", "claude", "codex", "cursor", "opencode"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
-      path: "/root/.opencontext/memory.md"
+      path: "/path/to/my-project/.opencontext/memory.md"
+      claude_md: "/path/to/my-project/CLAUDE.md"
+      agents_md: "/path/to/my-project/AGENTS.md"
+      cursor_rules_dir: "/path/to/my-project/.cursor/rules"
       inject_targets:
-        - path: "/root/.hermes/memories/MEMORY.md"
-          header: "## OpenContext Recent Activity"
-        - path: "/root/.openclaw/workspace/MEMORY.md"
+        - path: "~/.hermes/memories/MEMORY.md"
           header: "## OpenContext Recent Activity"
     refresh_interval: 300
 ```

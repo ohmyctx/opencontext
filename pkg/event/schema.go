@@ -208,6 +208,29 @@ func init() {
 		},
 		{
 			Source:      SourceOS,
+			Type:        EventTypeScreenshot,
+			Description: "A periodic screenshot was captured and stored locally. The event contains a file path only; image bytes are never uploaded.",
+			LabelDefs: map[string]FieldDef{
+				"app":          {Description: "Foreground app when screenshot was captured", Example: "chrome.exe"},
+				"app_name":     {Description: "Human-readable foreground app name", Example: "Google Chrome"},
+				"title":        {Description: "Foreground window title when available", Example: "OpenContext - Cursor"},
+				"content_type": {Description: "Always image", Example: "image"},
+				"storage":      {Description: "Storage mode for the screenshot payload", Example: "local_path"},
+				"platform":     {Description: "Operating system platform", Example: "macos"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"path":           {Description: "Absolute local path to the screenshot file", Example: "/Users/me/Library/Application Support/OpenContext/screenshots/macos/screenshot-1779980000000.jpg"},
+				"format":         {Description: "Image file format", Example: "jpg"},
+				"width":          {Description: "Saved image width in pixels when known", Example: "1440"},
+				"height":         {Description: "Saved image height in pixels when known", Example: "900"},
+				"size_bytes":     {Description: "Saved image size in bytes", Example: "245760"},
+				"retention_days": {Description: "Configured retention period for screenshot cleanup", Example: "3"},
+				"max_total_mb":   {Description: "Configured maximum screenshot directory size", Example: "1024"},
+				"url":            {Description: "Foreground browser URL when available", Example: "https://chatgpt.com/"},
+			},
+		},
+		{
+			Source:      SourceOS,
 			Type:        EventTypeAppLaunch,
 			Description: "An application was launched.",
 			LabelDefs: map[string]FieldDef{
@@ -435,6 +458,57 @@ func init() {
 			LabelDefs: map[string]FieldDef{
 				"project":    {Description: "Project name inferred from session working directory", Example: "opencontext"},
 				"session_id": {Description: "OpenCode session ID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
+			},
+			PayloadDefs: map[string]FieldDef{},
+		},
+		// ── OpenClaw ──────────────────────────────────────────────────────────
+		{
+			Source:      SourceOpenClaw,
+			Type:        EventTypeUserMessage,
+			Description: "A message received from a user in an OpenClaw session.",
+			LabelDefs: map[string]FieldDef{
+				"session_key": {Description: "OpenClaw session key (agent:workspace:channel)", Example: "agent:main:main"},
+				"channel_id":  {Description: "Channel the message arrived on", Example: "telegram"},
+				"sender_id":   {Description: "Platform-specific sender identifier", Example: "123456789"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"message":     {Description: "The text content of the user message", Example: "Deploy the latest build"},
+				"message_len": {Description: "Character count of the message", Example: "21"},
+			},
+		},
+		{
+			Source:      SourceOpenClaw,
+			Type:        EventTypeSessionStart,
+			Description: "A new OpenClaw session was started.",
+			LabelDefs: map[string]FieldDef{
+				"session_key": {Description: "OpenClaw session key", Example: "agent:main:main"},
+				"channel_id":  {Description: "Channel the session started on", Example: "telegram"},
+			},
+			PayloadDefs: map[string]FieldDef{},
+		},
+		// ── Hermes Agent ──────────────────────────────────────────────────────
+		{
+			Source:      SourceHermes,
+			Type:        EventTypeUserMessage,
+			Description: "A message sent by the user in a Hermes Agent gateway session.",
+			LabelDefs: map[string]FieldDef{
+				"session_id": {Description: "Hermes session ID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
+				"platform":   {Description: "Messaging platform (telegram, discord, slack, …)", Example: "telegram"},
+				"user_id":    {Description: "Platform-specific user identifier", Example: "123456789"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"message":     {Description: "The text content of the user message", Example: "Summarise my latest commits"},
+				"message_len": {Description: "Character count of the message", Example: "28"},
+			},
+		},
+		{
+			Source:      SourceHermes,
+			Type:        EventTypeSessionStart,
+			Description: "A new Hermes Agent gateway session was created.",
+			LabelDefs: map[string]FieldDef{
+				"session_id": {Description: "Hermes session ID", Example: "8478ea2f-d285-4bfc-92eb-0e5eb948e8fb"},
+				"platform":   {Description: "Messaging platform", Example: "telegram"},
+				"user_id":    {Description: "Platform-specific user identifier", Example: "123456789"},
 			},
 			PayloadDefs: map[string]FieldDef{},
 		},

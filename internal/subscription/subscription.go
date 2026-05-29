@@ -45,13 +45,27 @@ type InjectTargetConfig struct {
 
 // MemoryConfig defines where compiled memory is written.
 type MemoryConfig struct {
-	Backend  MemoryBackendType `mapstructure:"backend"`
-	Path     string            `mapstructure:"path"`      // for backend=file/raw_dump
-	ClaudeMD string            `mapstructure:"claude_md"` // path to CLAUDE.md to append @ reference
+	Backend MemoryBackendType `mapstructure:"backend"`
+	Path    string            `mapstructure:"path"` // for backend=file/raw_dump
+
+	// ClaudeMD injects the memory section directly into a CLAUDE.md file using
+	// HTML comment markers. Works for Claude Code in any project or global scope.
+	ClaudeMD string `mapstructure:"claude_md"`
+
+	// AgentsMD injects the memory section directly into an AGENTS.md file using
+	// HTML comment markers. Works for Codex, OpenCode, and any agent following
+	// the OpenAI AGENTS.md spec.
+	AgentsMD string `mapstructure:"agents_md"`
+
+	// CursorRulesDir writes a dedicated opencontext-memory.mdc rule file into
+	// the specified .cursor/rules/ directory. OpenContext owns this file entirely
+	// and overwrites it on each compile.
+	// Example: "/path/to/project/.cursor/rules"
+	CursorRulesDir string `mapstructure:"cursor_rules_dir"`
 
 	// InjectTargets lists additional files to inject the memory section into.
-	// Useful for pushing context into Hermes (MEMORY.md), OpenClaw (MEMORY.md),
-	// or any other agent that reads a Markdown memory file.
+	// Useful for Hermes (MEMORY.md), OpenClaw (MEMORY.md), or any custom agent
+	// that reads a Markdown memory file.
 	InjectTargets []InjectTargetConfig `mapstructure:"inject_targets"`
 }
 
@@ -179,11 +193,13 @@ func Load(path string) (*Config, error) {
 	// Expand ~ in paths
 	cfg.DataDir = expandHome(cfg.DataDir)
 	for i := range cfg.Subscriptions {
-		cfg.Subscriptions[i].Memory.Path = expandHome(cfg.Subscriptions[i].Memory.Path)
-		cfg.Subscriptions[i].Memory.ClaudeMD = expandHome(cfg.Subscriptions[i].Memory.ClaudeMD)
-		for j := range cfg.Subscriptions[i].Memory.InjectTargets {
-			cfg.Subscriptions[i].Memory.InjectTargets[j].Path =
-				expandHome(cfg.Subscriptions[i].Memory.InjectTargets[j].Path)
+		m := &cfg.Subscriptions[i].Memory
+		m.Path = expandHome(m.Path)
+		m.ClaudeMD = expandHome(m.ClaudeMD)
+		m.AgentsMD = expandHome(m.AgentsMD)
+		m.CursorRulesDir = expandHome(m.CursorRulesDir)
+		for j := range m.InjectTargets {
+			m.InjectTargets[j].Path = expandHome(m.InjectTargets[j].Path)
 		}
 	}
 

@@ -6,6 +6,7 @@ Monitors user activity on Windows and pushes structured events to the OpenContex
   - os.ui_click       — buttons/controls clicked (with element name & type)
   - os.text_input     — text submitted in input fields (Enter/Tab)
   - os.app_launch     — new applications started
+  - os.screenshot     — local screenshot path (L3, opt-in)
   - os.key_press      — individual keystrokes (L3 opt-in only)
 
 Usage:
@@ -32,6 +33,7 @@ from monitors.click_monitor import ClickMonitor
 from monitors.clipboard_monitor import ClipboardMonitor
 from monitors.keyboard_monitor import KeyboardMonitor
 from monitors.process_monitor import ProcessMonitor
+from monitors.screenshot_monitor import ScreenshotMonitor
 from monitors.window_monitor import WindowMonitor
 
 import sys
@@ -183,6 +185,15 @@ def main() -> None:
             logger.info("clipboard monitor started (os.clipboard_copy L3)")
         except Exception as e:
             logger.error("clipboard monitor failed to start: %s", e)
+
+    if config.collect_screenshots:
+        try:
+            sm = ScreenshotMonitor(event_queue, config)
+            sm.start()
+            started.append(sm)
+            logger.info("screenshot monitor started (os.screenshot L3)")
+        except Exception as e:
+            logger.error("screenshot monitor failed to start: %s", e)
 
     if not started:
         logger.error("no monitors could be started — exiting")

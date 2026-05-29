@@ -37,63 +37,61 @@ retention_days: 90
 # 一条订阅决定哪些事件成为记忆，以及记忆写入到哪里。
 
 subscriptions:
-  # ── Example 1: Global memory — all events, all sources
-  # 示例 1：全局记忆 — 所有事件，所有来源 ───────────────────────────────────
+  # ── Example 1: Global memory — all sources, injected into Claude Code globally
+  # 示例 1：全局记忆 — 所有来源，注入到 Claude Code 全局 CLAUDE.md ───────────
   - name: "global"
-    # filter: Controls which events are included in this subscription.
-    # 过滤器：控制此订阅包含哪些事件。
     filter:
-      # label_selectors: Key-value pairs to filter events by their labels.
-      #                 The event must have all specified key=value pairs.
-      # 标签选择器：按事件标签过滤的键值对。事件必须匹配所有指定的键值对。
-      # label_selectors:
-      #   project: "my-project"   # only events with label project=my-project
-      # sources: Event sources to capture. Empty = all sources.
-      # 来源：要捕获的事件来源。空 = 所有来源。
       sources: ["shell", "claude", "codex", "cursor", "opencode"]
-      # max_sensitivity: Maximum sensitivity level to include (1/2/3, default 2).
-      # 敏感度上限：包含的最大敏感度级别（1/2/3，默认2）。
       max_sensitivity: 2
-    # memory: Where and how to write the compiled memory.
-    # 记忆：编译后记忆的写入位置和方式。
     memory:
-      # backend: Output format. "raw_dump" = recent events as markdown (no LLM needed).
-      #         "file" = LLM-summarized memory (requires LLM config below).
-      # 后端：输出格式。"raw_dump" = 近期事件直接写入 markdown（无需 LLM）。
-      #      "file" = LLM 总结的记忆（需要下方 LLM 配置）。
       backend: "raw_dump"
-      # path: Absolute path to the output memory file.
-      # 路径：输出记忆文件的绝对路径。
-      path: "/root/.opencontext/memory.md"
-      # claude_md: Optional path to a CLAUDE.md file. OpenContext appends an
-      #           @.opencontext/memory.md reference so Claude Code picks it up.
-      # claude_md：可选的 CLAUDE.md 文件路径。OpenContext 会追加
-      #           @.opencontext/memory.md 引用，让 Claude Code 自动读取。
+      # path: The canonical memory file. Auto-generated — do not edit manually.
+      # path：规范记忆文件，自动生成，勿手动编辑。
+      path: "~/.opencontext/memory.md"
+
+      # ── Agent integrations (choose any combination) ──────────────────────────
+
+      # claude_md: Injects memory directly into CLAUDE.md using markers.
+      #            Works for global (~/.claude/CLAUDE.md) or project-level CLAUDE.md.
+      # claude_md：用标记将记忆直接注入 CLAUDE.md（全局或项目级均可）。
       # claude_md: "~/.claude/CLAUDE.md"
-      # inject_targets: Additional files to inject the memory section into.
-      #                 Useful for Hermes, OpenClaw, or any agent that reads a
-      #                 Markdown memory file.
-      # 注入目标：额外的文件列表，用于注入记忆片段。
-      #            适用于 Hermes、OpenClaw 或任何读取 Markdown 记忆文件的 Agent。
-      inject_targets:
-        - path: "/root/.hermes/memories/MEMORY.md"
-          header: "## OpenContext Recent Activity"
+
+      # agents_md: Injects memory into AGENTS.md using markers.
+      #            For Codex, OpenCode, and other OpenAI AGENTS.md-compatible agents.
+      # agents_md：用标记将记忆注入 AGENTS.md，适用于 Codex、OpenCode 等。
+      # agents_md: "~/my-project/AGENTS.md"
+
+      # cursor_rules_dir: Writes opencontext-memory.mdc into the Cursor rules directory.
+      #                   OpenContext owns this file and overwrites it on every compile.
+      # cursor_rules_dir：将 opencontext-memory.mdc 写入 Cursor rules 目录，每次编译覆盖。
+      # cursor_rules_dir: "~/my-project/.cursor/rules"
+
+      # inject_targets: Inject memory into any other Markdown memory file (Hermes, OpenClaw, etc.).
+      # inject_targets：注入到其他 Markdown 记忆文件（Hermes、OpenClaw 等）。
+      # inject_targets:
+      #   - path: "~/.hermes/memories/MEMORY.md"
+      #     header: "## OpenContext Recent Activity"
+      #   - path: "~/.openclaw/workspace/MEMORY.md"
+      #     header: "## OpenContext Recent Activity"
+
     # refresh_interval: Seconds between raw_dump auto-compiles (default 300, min 10).
     # 刷新间隔：raw_dump 自动编译间隔，单位秒（默认300，最小10）。
     refresh_interval: 300
 
-  # ── Example 2: Project-specific memory — filtered by project label
-  # 示例 2：项目级记忆 — 按 project 标签过滤 ─────────────────────────────────
+  # ── Example 2: Project-specific memory — Claude Code + Cursor for one project
+  # 示例 2：项目级记忆 — 同时接入 Claude Code 和 Cursor ─────────────────────
   # - name: "my-project"
   #   filter:
   #     label_selectors:
-  #       project: "my-project"   # only events with label project=my-project
-  #     sources: ["shell", "claude", "codex", "cursor", "opencode", "browser"]
+  #       project: "my-project"
+  #     sources: ["shell", "claude", "codex", "cursor", "opencode"]
   #     max_sensitivity: 2
   #   memory:
   #     backend: "raw_dump"
   #     path: "/path/to/my-project/.opencontext/memory.md"
   #     claude_md: "/path/to/my-project/CLAUDE.md"
+  #     agents_md: "/path/to/my-project/AGENTS.md"
+  #     cursor_rules_dir: "/path/to/my-project/.cursor/rules"
   #   refresh_interval: 300
 
   # ── Example 3: LLM summarization — requires LLM config below
@@ -105,9 +103,8 @@ subscriptions:
   #   memory:
   #     backend: "file"
   #     path: "/path/to/my-project/.opencontext/memory.md"
+  #     claude_md: "/path/to/my-project/CLAUDE.md"
   #   schedule: "0 */6 * * *"   # cron: every 6 hours
-  #   # LLM: OpenAI / Anthropic compatible API. Leave api_key empty to use defaults.
-  #   # LLM：OpenAI / Anthropic 兼容 API。api_key 为空则使用环境变量或默认配置。
   #   llm:
   #     provider: "openai"      # or "anthropic", "ollama"
   #     model: "gpt-4o"
@@ -125,20 +122,22 @@ subscriptions:
 #   subscriptions  []Subscription  List of memory subscriptions
 #
 # Subscription fields:
-#   name           string   Unique subscription name
-#   filter.label_selectors map[string]string  Label key-value pairs (event must match all)
-#   filter.sources         []string  Source name filter (empty=all)
+#   name                   string   Unique subscription name
+#   filter.label_selectors map      Label key=value pairs (event must match all)
+#   filter.sources         []string Source name filter (empty=all)
 #   filter.max_sensitivity int      Per-subscription sensitivity cap
-#   memory.backend        string   "raw_dump" or "file"
-#   memory.path          string   Output memory file path
-#   memory.claude_md     string   CLAUDE.md auto-reference path
-#   memory.inject_targets []InjectTarget  Additional injection files
-#   schedule           string   Cron expression for LLM compile triggers
-#   refresh_interval   int      Seconds between raw_dump auto-refreshes
-#   llm.provider       string   LLM provider: openai|anthropic|ollama
-#   llm.model          string   Model name
-#   llm.api_key        string   API key (or env var)
-#   llm.base_url       string   Custom API endpoint URL
+#   memory.backend         string   "raw_dump" or "file"
+#   memory.path            string   Output memory file path (auto-generated, do not edit)
+#   memory.claude_md       string   CLAUDE.md path — injects memory section with markers
+#   memory.agents_md       string   AGENTS.md path — injects memory section with markers
+#   memory.cursor_rules_dir string  .cursor/rules/ dir — writes opencontext-memory.mdc
+#   memory.inject_targets  []InjectTarget  Additional injection files
+#   schedule               string   Cron expression for LLM compile triggers
+#   refresh_interval       int      Seconds between raw_dump auto-refreshes (default 300)
+#   llm.provider           string   LLM provider: openai|anthropic|ollama
+#   llm.model              string   Model name
+#   llm.api_key            string   API key (or env var)
+#   llm.base_url           string   Custom API endpoint URL
 #
 # InjectTarget fields:
 #   path    string   Target file path to inject memory into

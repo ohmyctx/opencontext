@@ -25,6 +25,8 @@ func Mount(r chi.Router, dispatch DispatchFunc) {
 	r.Post("/api/v1/hooks/codex", a.handleCodexHook)
 	r.Post("/api/v1/hooks/cursor", a.handleCursorHook)
 	r.Post("/api/v1/hooks/opencode", a.handleOpenCodeHook)
+	r.Post("/api/v1/hooks/hermes", a.handleHermesHook)
+	r.Post("/api/v1/hooks/openclaw", a.handleOpenClawHook)
 }
 
 // ── Codex CLI ─────────────────────────────────────────────────────────────────
@@ -302,6 +304,197 @@ func buildOpenCodeSessionStartEvent(sessionID, cwd string) *event.ActivityEvent 
 		ID:          uuid.Must(uuid.NewV7()).String(),
 		Ts:          time.Now().UnixMilli(),
 		Source:      event.SourceOpenCode,
+		Type:        event.EventTypeSessionStart,
+		Sensitivity: event.SensitivityL1,
+		Labels:      labels,
+		Payload:     map[string]any{},
+	}
+}
+
+// ── Hermes Agent ─────────────────────────────────────────────────────────────
+
+// hermesHookInput is the JSON body sent by the Hermes handler.py hook.
+// handler.py serialises the context dict plus event_type from the gateway.
+// Relevant events:
+//   - agent:start  → platform, user_id, session_id, message
+//   - session:start → platform, user_id, session_id, session_key
+type hermesHookInput struct {
+	EventType string `json:"event_type"`
+	Platform  string `json:"platform"`
+	UserID    string `json:"user_id"`
+	SessionID string `json:"session_id"`
+	Message   string `json:"message"`
+}
+
+func (a *Adapter) handleHermesHook(w http.ResponseWriter, r *http.Request) {
+	var input hermesHookInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	var e *event.ActivityEvent
+	switch input.EventType {
+	case "agent:start":
+		e = buildHermesMessageEvent(input)
+	case "session:start":
+		e = buildHermesSessionStartEvent(input)
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
+		return
+	}
+
+	a.dispatch(w, e)
+}
+
+func buildHermesMessageEvent(input hermesHookInput) *event.ActivityEvent {
+	msg := strings.TrimSpace(input.Message)
+	if len([]rune(msg)) < 5 {
+		return nil
+	}
+	labels := map[string]string{}
+	if input.SessionID != "" {
+		labels["session_id"] = input.SessionID
+	}
+	if input.Platform != "" {
+		labels["platform"] = input.Platform
+	}
+	if input.UserID != "" {
+		labels["user_id"] = input.UserID
+	}
+	return &event.ActivityEvent{
+		ID:          uuid.Must(uuid.NewV7()).String(),
+		Ts:          time.Now().UnixMilli(),
+		Source:      event.SourceHermes,
+		Type:        event.EventTypeUserMessage,
+		Sensitivity: event.SensitivityL2,
+		Labels:      labels,
+		Payload: map[string]any{
+			"message":     msg,
+			"message_len": len([]rune(msg)),
+		},
+	}
+}
+
+func buildHermesSessionStartEvent(input hermesHookInput) *event.ActivityEvent {
+	labels := map[string]string{}
+	if input.SessionID != "" {
+		labels["session_id"] = input.SessionID
+	}
+	if input.Platform != "" {
+		labels["platform"] = input.Platform
+	}
+	if input.UserID != "" {
+		labels["user_id"] = input.UserID
+	}
+	return &event.ActivityEvent{
+		ID:          uuid.Must(uuid.NewV7()).String(),
+		Ts:          time.Now().UnixMilli(),
+		Source:      event.SourceHermes,
+		Type:        event.EventTypeSessionStart,
+		Sensitivity: event.SensitivityL1,
+		Labels:      labels,
+		Payload:     map[string]any{},
+	}
+}
+
+// ── OpenClaw ──────────────────────────────────────────────────────────────────
+
+// openClawHookInput is the JSON body sent by the OpenClaw internal hook handler.js.
+// The handler serialises the InternalHookEvent fields:
+//   - message_received: type="message", action="received", context={from, content, senderId, sessionKey, channelId}
+//   - session_start:    type="session", action="start",    context={sessionKey, channelId}
+type openClawHookInput struct {
+	Type       string                 `json:"type"`
+	Action     string                 `json:"action"`
+	SessionKey string                 `json:"session_key"`
+	Context    map[string]interface{} `json:"context"`
+}
+
+func (a *Adapter) handleOpenClawHook(w http.ResponseWriter, r *http.Request) {
+	var input openClawHookInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	var e *event.ActivityEvent
+	switch {
+	case input.Type == "message" && input.Action == "received":
+		e = buildOpenClawMessageEvent(input)
+	case input.Type == "session" && input.Action == "start":
+		e = buildOpenClawSessionStartEvent(input)
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
+		return
+	}
+
+	a.dispatch(w, e)
+}
+
+func openClawStr(m map[string]interface{}, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func buildOpenClawMessageEvent(input openClawHookInput) *event.ActivityEvent {
+	msg := strings.TrimSpace(openClawStr(input.Context, "content"))
+	if len([]rune(msg)) < 5 {
+		return nil
+	}
+	sessionKey := input.SessionKey
+	if sessionKey == "" {
+		sessionKey = openClawStr(input.Context, "sessionKey")
+	}
+	channelID := openClawStr(input.Context, "channelId")
+	senderID := openClawStr(input.Context, "senderId")
+
+	labels := map[string]string{}
+	if sessionKey != "" {
+		labels["session_key"] = sessionKey
+	}
+	if channelID != "" {
+		labels["channel_id"] = channelID
+	}
+	if senderID != "" {
+		labels["sender_id"] = senderID
+	}
+	return &event.ActivityEvent{
+		ID:          uuid.Must(uuid.NewV7()).String(),
+		Ts:          time.Now().UnixMilli(),
+		Source:      event.SourceOpenClaw,
+		Type:        event.EventTypeUserMessage,
+		Sensitivity: event.SensitivityL2,
+		Labels:      labels,
+		Payload: map[string]any{
+			"message":     msg,
+			"message_len": len([]rune(msg)),
+		},
+	}
+}
+
+func buildOpenClawSessionStartEvent(input openClawHookInput) *event.ActivityEvent {
+	sessionKey := input.SessionKey
+	if sessionKey == "" {
+		sessionKey = openClawStr(input.Context, "sessionKey")
+	}
+	channelID := openClawStr(input.Context, "channelId")
+
+	labels := map[string]string{}
+	if sessionKey != "" {
+		labels["session_key"] = sessionKey
+	}
+	if channelID != "" {
+		labels["channel_id"] = channelID
+	}
+	return &event.ActivityEvent{
+		ID:          uuid.Must(uuid.NewV7()).String(),
+		Ts:          time.Now().UnixMilli(),
+		Source:      event.SourceOpenClaw,
 		Type:        event.EventTypeSessionStart,
 		Sensitivity: event.SensitivityL1,
 		Labels:      labels,

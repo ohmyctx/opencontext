@@ -695,6 +695,8 @@ schema first and use --dry-run when available.`,
 	collector.AddCommand(buildCodexCollectorCmd())
 	collector.AddCommand(buildCursorCollectorCmd())
 	collector.AddCommand(buildOpenCodeCollectorCmd())
+	collector.AddCommand(buildOpenClawCollectorCmd())
+	collector.AddCommand(buildHermesCollectorCmd())
 	collector.AddCommand(buildBrowserChromeCollectorCmd())
 	collector.AddCommand(buildBrowserFirefoxCollectorCmd())
 	collector.AddCommand(buildBrowserEdgeCollectorCmd())
@@ -915,9 +917,9 @@ Requires Codex CLI with hooks support (codex >= 0.1.x).`,
 
 func buildCodexUninstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "uninstall",
-		Short: "Remove OpenContext hooks from Codex CLI",
-		Long: `Removes hook script files and hook entries from ~/.codex/hooks.json.`,
+		Use:     "uninstall",
+		Short:   "Remove OpenContext hooks from Codex CLI",
+		Long:    `Removes hook script files and hook entries from ~/.codex/hooks.json.`,
 		Example: `  oc collector codex uninstall`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return installers.UninstallCodex()
@@ -962,9 +964,9 @@ Requires Cursor IDE with hooks support (Cursor >= 1.0).`,
 
 func buildCursorUninstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "uninstall",
-		Short: "Remove OpenContext hooks from Cursor IDE",
-		Long: `Removes hook script files and hook entries from ~/.cursor/hooks.json.`,
+		Use:     "uninstall",
+		Short:   "Remove OpenContext hooks from Cursor IDE",
+		Long:    `Removes hook script files and hook entries from ~/.cursor/hooks.json.`,
 		Example: `  oc collector cursor uninstall`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return installers.UninstallCursor()
@@ -1010,12 +1012,117 @@ format (via opencode-claude-hooks npm package).`,
 
 func buildOpenCodeUninstallCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "uninstall",
-		Short: "Remove OpenContext hooks from OpenCode",
-		Long: `Removes hook script files and hook entries from ~/.config/opencode/hooks.json.`,
+		Use:     "uninstall",
+		Short:   "Remove OpenContext hooks from OpenCode",
+		Long:    `Removes hook script files and hook entries from ~/.config/opencode/hooks.json.`,
 		Example: `  oc collector opencode uninstall`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return installers.UninstallOpenCode()
+		},
+	}
+	return cmd
+}
+
+// ── OpenClaw collector ────────────────────────────────────────────────────────
+
+func buildOpenClawCollectorCmd() *cobra.Command {
+	openclaw := &cobra.Command{
+		Use:   "openclaw",
+		Short: "OpenClaw hook collector commands",
+		Long: `Install the OpenContext internal hook into OpenClaw so user messages
+and session starts are posted to the OpenContext daemon.`,
+		Example: `  oc collector openclaw install
+  oc collector openclaw install --daemon http://127.0.0.1:6060`,
+	}
+	openclaw.AddCommand(buildOpenClawInstallCmd())
+	openclaw.AddCommand(buildOpenClawUninstallCmd())
+	return openclaw
+}
+
+func buildOpenClawInstallCmd() *cobra.Command {
+	var daemonAddr string
+
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install OpenContext internal hook into OpenClaw",
+		Long: `Creates an OpenClaw internal hook in ~/.opencontext/collectors/openclaw-hooks/opencontext/
+containing HOOK.md and handler.js, then registers the scan directory via:
+  openclaw config patch --stdin
+
+The hook fires on message_received (user messages) and session_start events,
+forwarding them to the OpenContext daemon for recording.
+
+Requires OpenClaw >= 2026.3 with internal hooks support.
+Restart OpenClaw after installation.`,
+		Example: `  oc collector openclaw install
+  oc collector openclaw install --daemon http://127.0.0.1:6060`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installers.InstallOpenClaw(daemonAddr)
+		},
+	}
+	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	return cmd
+}
+
+func buildOpenClawUninstallCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "uninstall",
+		Short:   "Remove OpenContext internal hook from OpenClaw",
+		Long:    `Removes the ~/.opencontext/collectors/openclaw-hooks/opencontext/ directory.`,
+		Example: `  oc collector openclaw uninstall`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installers.UninstallOpenClaw()
+		},
+	}
+	return cmd
+}
+
+// ── Hermes Agent collector ────────────────────────────────────────────────────
+
+func buildHermesCollectorCmd() *cobra.Command {
+	hermes := &cobra.Command{
+		Use:   "hermes",
+		Short: "Hermes Agent gateway hook collector commands",
+		Long: `Install the OpenContext gateway hook into Hermes Agent so agent messages
+and session starts are posted to the OpenContext daemon.`,
+		Example: `  oc collector hermes install
+  oc collector hermes install --daemon http://127.0.0.1:6060`,
+	}
+	hermes.AddCommand(buildHermesInstallCmd())
+	hermes.AddCommand(buildHermesUninstallCmd())
+	return hermes
+}
+
+func buildHermesInstallCmd() *cobra.Command {
+	var daemonAddr string
+
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install OpenContext gateway hook into Hermes Agent (~/.hermes/hooks/opencontext/)",
+		Long: `Creates ~/.hermes/hooks/opencontext/HOOK.yaml and handler.py.
+The gateway hook fires on agent:start (user message) and session:start events,
+forwarding them to the OpenContext daemon for recording.
+
+Requires Hermes Agent with gateway hook support (hermes >= 0.4).
+Restart the Hermes gateway after installation: hermes gateway`,
+		Example: `  oc collector hermes install
+  oc collector hermes install --daemon http://127.0.0.1:6060`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installers.InstallHermes(daemonAddr)
+		},
+	}
+	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	return cmd
+}
+
+func buildHermesUninstallCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "uninstall",
+		Short:   "Remove OpenContext gateway hook from Hermes Agent",
+		Long:    `Removes the ~/.hermes/hooks/opencontext/ directory.`,
+		Example: `  oc collector hermes uninstall`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return installers.UninstallHermes()
 		},
 	}
 	return cmd
@@ -1970,6 +2077,12 @@ func buildEventSummary(e *event.ActivityEvent) string {
 		if contentType := valueAsString(e.Payload["content_type"]); contentType != "" {
 			return "copied " + contentType
 		}
+	}
+	if e.Source == event.SourceOS && e.Type == event.EventTypeScreenshot {
+		if path := valueAsString(e.Payload["path"]); path != "" {
+			return truncateSingleLine("screenshot: "+path, 80)
+		}
+		return "screenshot captured"
 	}
 
 	summary := firstEventString(e,
