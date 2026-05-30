@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ import (
 	"github.com/ohmyctx/opencontext/internal/installers"
 	"github.com/ohmyctx/opencontext/internal/registry"
 	"github.com/ohmyctx/opencontext/internal/service"
+	"github.com/ohmyctx/opencontext/internal/subscription"
 	"github.com/ohmyctx/opencontext/pkg/client"
 	"github.com/ohmyctx/opencontext/pkg/event"
 )
@@ -50,23 +52,25 @@ func buildRoot() *cobra.Command {
 	root := &cobra.Command{
 		Use:     "oc",
 		Version: version,
-		Short:   "OpenContext CLI — inspect events, trigger compiles, manage collectors",
+		Short:   "OpenContext CLI — inspect events, subscriptions, memory, and collectors",
 		Long: `oc is the command-line interface for OpenContext.
 
 Agent workflow:
   1. Inspect commands with: oc schema --format json
   2. Start or verify the daemon with: oc daemon install && oc status
-  3. Install selected collectors with: oc collector <name> install
-  4. Query events or trigger memory compile with JSON output
+  3. Discover collectors with: oc collector list
+  4. Install selected collectors with: oc collector <name> install
+  5. Query events, inspect subscriptions, or compile memory
 
 Environment variables:
   OC_DAEMON_URL    OpenContext daemon base URL (default: http://localhost:6060)`,
 		Example: `  oc schema --format json
   oc status
-  oc collectors list
+  oc collector list
   oc collector browser-chrome install --dry-run
-  oc events --since 5m
-  oc events --since 5m --format table`,
+  oc event list --since 5m
+  oc subscription list --format json
+  oc memory compile --dry-run --format json`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -81,45 +85,24 @@ Environment variables:
 	root.AddCommand(
 		buildDaemonCmd(),
 		buildStatusCmd(),
-		buildEventsCmd(),
-		buildCompileCmd(),
-		buildCollectorsCmd(),
+		buildEventCmd(),
+		buildSubscriptionCmd(),
+		buildMemoryCmd(),
 		buildCollectorCmd(),
-		buildInjectCmd(),
 		buildSchemaCmd(root),
 	)
 
 	return root
 }
 
-// ── oc collectors ────────────────────────────────────────────────────────────
-
-func buildCollectorsCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "collectors",
-		Short: "List collector integrations and event schemas",
-		Long: `Discover available OpenContext collector integrations and the event
-schemas they emit. Agents should use this before asking the user which
-collectors to install.`,
-		Example: `  oc collectors list
-  oc collectors list --format json
-  oc collectors info browser-chrome
-  oc collectors schemas --format json`,
-	}
-	cmd.AddCommand(buildCollectorsListCmd())
-	cmd.AddCommand(buildCollectorsInfoCmd())
-	cmd.AddCommand(buildCollectorsSchemasCmd())
-	return cmd
-}
-
-func buildCollectorsListCmd() *cobra.Command {
+func buildCollectorListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List known collector integrations",
 		Long: `List collector manifests including name, kind, version, emitted sources,
 and the command or guide used to install each collector.`,
-		Example: `  oc collectors list
-  oc collectors list --format json`,
+		Example: `  oc collector list
+  oc collector list --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			collectors := registry.AllCollectors()
 			if jsonOut {
@@ -140,14 +123,14 @@ and the command or guide used to install each collector.`,
 	}
 }
 
-func buildCollectorsInfoCmd() *cobra.Command {
+func buildCollectorInfoCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "info <name>",
 		Short: "Show collector integration details",
 		Long: `Show a single collector manifest with install command, supported platforms,
 emitted sources, docs, and schema references.`,
-		Example: `  oc collectors info shell
-  oc collectors info browser-chrome --format json`,
+		Example: `  oc collector info shell
+  oc collector info browser-chrome --format json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, ok := registry.LookupCollector(args[0])
@@ -185,14 +168,14 @@ emitted sources, docs, and schema references.`,
 	}
 }
 
-func buildCollectorsSchemasCmd() *cobra.Command {
+func buildCollectorSchemasCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "schemas",
 		Short: "List registered event schemas",
 		Long: `List registered event schemas. Schemas are advisory metadata for
 agents and memory rendering; events without schemas can still be ingested.`,
-		Example: `  oc collectors schemas
-  oc collectors schemas --format json`,
+		Example: `  oc collector schemas
+  oc collector schemas --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			schemas := event.AllSchemas()
 			sortSchemas(schemas)
@@ -272,6 +255,7 @@ func buildDaemonRunCmd() *cobra.Command {
 func buildDaemonInstallCmd() *cobra.Command {
 	var cfg service.Config
 	var force bool
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install and start OpenContext as a background service",
@@ -282,7 +266,8 @@ This command is idempotent when the service is not installed. Use --force to
 replace an existing installation.`,
 		Example: `  oc daemon install
   oc daemon install --force
-  oc daemon install --config ~/.opencontext/config.yaml`,
+  oc daemon install --config ~/.opencontext/config.yaml
+  oc daemon install --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := service.Resolve(&cfg); err != nil {
 				return err
@@ -291,37 +276,66 @@ replace an existing installation.`,
 			if err != nil {
 				return err
 			}
+			result := sideEffectResult{
+				Status:    "installed",
+				Action:    "install",
+				Resource:  "daemon",
+				DryRun:    dryRun,
+				Paths:     daemonInstallPaths(cfg),
+				NextSteps: []string{"Run: oc daemon status --format json", "Run: oc status --format json"},
+			}
+			if dryRun {
+				result.Status = "planned"
+				result.Platform = mgr.Platform()
+				if jsonOut {
+					return printJSON(result)
+				}
+				printSideEffectPlan(result)
+				return nil
+			}
 			if st, _ := mgr.Status(); st != nil && st.Installed && !force {
 				return fmt.Errorf("daemon service already installed; use --force to reinstall")
 			}
-			if force {
-				_ = mgr.Uninstall()
-			}
-			if err := mgr.Install(cfg); err != nil {
-				return err
-			}
-			if err := service.SaveMeta(&service.Meta{
-				LogFile:     cfg.LogFile,
-				LogMaxSize:  cfg.LogMaxSize,
-				WorkDir:     cfg.WorkDir,
-				ConfigFile:  cfg.ConfigFile,
-				BinaryPath:  cfg.BinaryPath,
-				Platform:    mgr.Platform(),
-				InstalledAt: service.NowISO(),
-			}); err != nil {
-				return fmt.Errorf("save daemon metadata: %w", err)
-			}
-			fmt.Println("OpenContext daemon installed and started.")
-			fmt.Printf("  platform: %s\n", mgr.Platform())
-			fmt.Printf("  binary:   %s\n", cfg.BinaryPath)
-			fmt.Printf("  workdir:  %s\n", cfg.WorkDir)
-			fmt.Printf("  log:      %s\n", cfg.LogFile)
-			if strings.Contains(mgr.Platform(), "user") {
-				if enabled, user := service.CheckLinger(); !enabled {
-					fmt.Printf("\nWarning: user service may stop after logout. To keep it alive, run: sudo loginctl enable-linger %s\n", user)
+			result.Platform = mgr.Platform()
+			install := func() error {
+				if force {
+					_ = mgr.Uninstall()
 				}
+				if err := mgr.Install(cfg); err != nil {
+					return err
+				}
+				if err := service.SaveMeta(&service.Meta{
+					LogFile:     cfg.LogFile,
+					LogMaxSize:  cfg.LogMaxSize,
+					WorkDir:     cfg.WorkDir,
+					ConfigFile:  cfg.ConfigFile,
+					BinaryPath:  cfg.BinaryPath,
+					Platform:    mgr.Platform(),
+					InstalledAt: service.NowISO(),
+				}); err != nil {
+					return fmt.Errorf("save daemon metadata: %w", err)
+				}
+				fmt.Println("OpenContext daemon installed and started.")
+				fmt.Printf("  platform: %s\n", mgr.Platform())
+				fmt.Printf("  binary:   %s\n", cfg.BinaryPath)
+				fmt.Printf("  workdir:  %s\n", cfg.WorkDir)
+				fmt.Printf("  log:      %s\n", cfg.LogFile)
+				if strings.Contains(mgr.Platform(), "user") {
+					if enabled, user := service.CheckLinger(); !enabled {
+						fmt.Printf("\nWarning: user service may stop after logout. To keep it alive, run: sudo loginctl enable-linger %s\n", user)
+					}
+				}
+				return nil
 			}
-			return nil
+			if jsonOut {
+				output, err := captureStdout(install)
+				if err != nil {
+					return err
+				}
+				result.Output = strings.TrimSpace(output)
+				return printJSON(result)
+			}
+			return install()
 		},
 	}
 	cmd.Flags().StringVar(&cfg.ConfigFile, "config", "", "OpenContext config file (default: ~/.opencontext/config.yaml)")
@@ -329,39 +343,82 @@ replace an existing installation.`,
 	cmd.Flags().StringVar(&cfg.LogFile, "log-file", "", "log file path (default: ~/.opencontext/logs/oc.log)")
 	cmd.Flags().Int64Var(&cfg.LogMaxSize, "log-max-size", 10, "max log size in MB")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing service installation")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview service files and metadata without installing")
 	cmd.PreRun = func(cmd *cobra.Command, args []string) {
 		cfg.LogMaxSize *= 1024 * 1024
 	}
-	return cmd
+	return markSideEffect(cmd, false)
 }
 
 func buildDaemonUninstallCmd() *cobra.Command {
-	return &cobra.Command{
+	var dryRun bool
+	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove the installed daemon service",
+		Example: `  oc daemon uninstall
+  oc daemon uninstall --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mgr, err := service.NewManager()
 			if err != nil {
 				return err
+			}
+			result := sideEffectResult{
+				Status:   "uninstalled",
+				Action:   "uninstall",
+				Resource: "daemon",
+				DryRun:   dryRun,
+				Platform: mgr.Platform(),
+				Paths:    daemonUninstallPaths(),
+			}
+			if dryRun {
+				result.Status = "planned"
+				if jsonOut {
+					return printJSON(result)
+				}
+				printSideEffectPlan(result)
+				return nil
 			}
 			if err := mgr.Uninstall(); err != nil {
 				return err
 			}
 			service.RemoveMeta()
+			if jsonOut {
+				return printJSON(result)
+			}
 			fmt.Println("OpenContext daemon uninstalled.")
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview service removal without uninstalling")
+	return markSideEffect(cmd, true)
 }
 
 func buildDaemonServiceCmd(use, short string, action func(service.Manager) error) *cobra.Command {
-	return &cobra.Command{
-		Use:   use,
-		Short: short,
+	var dryRun bool
+	cmd := &cobra.Command{
+		Use:     use,
+		Short:   short,
+		Example: fmt.Sprintf("  oc daemon %s\n  oc daemon %s --dry-run --format json", use, use),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mgr, err := service.NewManager()
 			if err != nil {
 				return err
+			}
+			result := sideEffectResult{
+				Status:   map[string]string{"start": "started", "stop": "stopped", "restart": "restarted"}[use],
+				Action:   use,
+				Resource: "daemon",
+				DryRun:   dryRun,
+				Platform: mgr.Platform(),
+				Paths:    daemonUninstallPaths(),
+			}
+			if dryRun {
+				result.Status = "planned"
+				if jsonOut {
+					return printJSON(result)
+				}
+				printSideEffectPlan(result)
+				return nil
 			}
 			if err := requireServiceInstalled(mgr); err != nil {
 				return err
@@ -369,11 +426,16 @@ func buildDaemonServiceCmd(use, short string, action func(service.Manager) error
 			if err := action(mgr); err != nil {
 				return err
 			}
-			past := map[string]string{"start": "started", "stop": "stopped", "restart": "restarted"}[use]
+			if jsonOut {
+				return printJSON(result)
+			}
+			past := result.Status
 			fmt.Printf("OpenContext daemon %s.\n", past)
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview service action without changing daemon state")
+	return markSideEffect(cmd, use == "stop" || use == "restart")
 }
 
 func buildDaemonStatusCmd() *cobra.Command {
@@ -503,9 +565,203 @@ health statistics such as version, uptime, and stored event count.`,
 	}
 }
 
-// ── oc events ─────────────────────────────────────────────────────────────────
+// ── oc subscription ───────────────────────────────────────────────────────────
 
-func buildEventsCmd() *cobra.Command {
+type subscriptionView struct {
+	Name            string            `json:"name"`
+	Sources         []event.Source    `json:"sources,omitempty"`
+	LabelSelectors  map[string]string `json:"label_selectors,omitempty"`
+	MaxSensitivity  int               `json:"max_sensitivity"`
+	Backend         string            `json:"backend"`
+	MemoryPath      string            `json:"memory_path,omitempty"`
+	ClaudeMD        string            `json:"claude_md,omitempty"`
+	AgentsMD        string            `json:"agents_md,omitempty"`
+	CursorRulesDir  string            `json:"cursor_rules_dir,omitempty"`
+	InjectTargets   []string          `json:"inject_targets,omitempty"`
+	RefreshInterval string            `json:"refresh_interval,omitempty"`
+	Schedule        string            `json:"schedule,omitempty"`
+	LLMProvider     string            `json:"llm_provider,omitempty"`
+	LLMModel        string            `json:"llm_model,omitempty"`
+}
+
+func buildSubscriptionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "subscription",
+		Short: "Inspect memory subscriptions",
+		Long: `Inspect memory subscriptions from the local OpenContext config.
+
+A subscription chooses which event sources and labels become memory, which
+backend renders that memory, and which files receive it.`,
+		Example: `  oc subscription list --format json
+  oc subscription info global --format json`,
+	}
+	cmd.AddCommand(buildSubscriptionListCmd())
+	cmd.AddCommand(buildSubscriptionInfoCmd())
+	return cmd
+}
+
+func buildSubscriptionListCmd() *cobra.Command {
+	var configFile string
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List configured memory subscriptions",
+		Long:  `List configured memory subscriptions from ~/.opencontext/config.yaml or --config.`,
+		Example: `  oc subscription list
+  oc subscription list --config ~/.opencontext/config.yaml --format json`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := subscription.Load(configFile)
+			if err != nil {
+				return err
+			}
+			views := subscriptionViews(cfg.Subscriptions)
+			if jsonOut {
+				return printJSON(map[string]any{
+					"config_file":   cfg.ConfigFile,
+					"subscriptions": views,
+					"total":         len(views),
+				})
+			}
+			if len(views) == 0 {
+				fmt.Println("No subscriptions configured.")
+				return nil
+			}
+			fmt.Printf("%-24s %-10s %-18s %s\n", "NAME", "BACKEND", "SOURCES", "MEMORY")
+			for _, v := range views {
+				fmt.Printf("%-24s %-10s %-18s %s\n", v.Name, v.Backend, formatSources(v.Sources), v.MemoryPath)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&configFile, "config", "", "OpenContext config file (default: ~/.opencontext/config.yaml)")
+	return cmd
+}
+
+func buildSubscriptionInfoCmd() *cobra.Command {
+	var configFile string
+	cmd := &cobra.Command{
+		Use:   "info <name>",
+		Short: "Show one memory subscription",
+		Long:  `Show one configured memory subscription, including filters, memory path, targets, schedule, and backend.`,
+		Example: `  oc subscription info global
+  oc subscription info opencontext-project --format json`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := subscription.Load(configFile)
+			if err != nil {
+				return err
+			}
+			for _, sub := range cfg.Subscriptions {
+				if sub.Name != args[0] {
+					continue
+				}
+				view := subscriptionViewOf(sub)
+				if jsonOut {
+					return printJSON(map[string]any{
+						"config_file":  cfg.ConfigFile,
+						"subscription": view,
+					})
+				}
+				fmt.Printf("name:             %s\n", view.Name)
+				fmt.Printf("backend:          %s\n", view.Backend)
+				fmt.Printf("sources:          %s\n", formatSources(view.Sources))
+				fmt.Printf("max_sensitivity:  %d\n", view.MaxSensitivity)
+				fmt.Printf("memory_path:      %s\n", view.MemoryPath)
+				if len(view.LabelSelectors) > 0 {
+					fmt.Printf("label_selectors:  %v\n", view.LabelSelectors)
+				}
+				if len(view.InjectTargets) > 0 {
+					fmt.Println("inject_targets:")
+					for _, target := range view.InjectTargets {
+						fmt.Printf("  %s\n", target)
+					}
+				}
+				return nil
+			}
+			return fmt.Errorf("unknown subscription %q", args[0])
+		},
+	}
+	cmd.Flags().StringVar(&configFile, "config", "", "OpenContext config file (default: ~/.opencontext/config.yaml)")
+	return cmd
+}
+
+func subscriptionViews(subs []subscription.Subscription) []subscriptionView {
+	views := make([]subscriptionView, 0, len(subs))
+	for _, sub := range subs {
+		views = append(views, subscriptionViewOf(sub))
+	}
+	sort.Slice(views, func(i, j int) bool { return views[i].Name < views[j].Name })
+	return views
+}
+
+func subscriptionViewOf(sub subscription.Subscription) subscriptionView {
+	targets := []string{}
+	if sub.Memory.ClaudeMD != "" {
+		targets = append(targets, sub.Memory.ClaudeMD)
+	}
+	if sub.Memory.AgentsMD != "" {
+		targets = append(targets, sub.Memory.AgentsMD)
+	}
+	if sub.Memory.CursorRulesDir != "" {
+		targets = append(targets, filepath.Join(sub.Memory.CursorRulesDir, "opencontext-memory.mdc"))
+	}
+	for _, t := range sub.Memory.InjectTargets {
+		targets = append(targets, t.Path)
+	}
+	view := subscriptionView{
+		Name:            sub.Name,
+		Sources:         sub.Filter.Sources,
+		LabelSelectors:  sub.Filter.LabelSelectors,
+		MaxSensitivity:  int(sub.MaxSensitivity()),
+		Backend:         string(sub.Memory.Backend),
+		MemoryPath:      sub.Memory.Path,
+		ClaudeMD:        sub.Memory.ClaudeMD,
+		AgentsMD:        sub.Memory.AgentsMD,
+		CursorRulesDir:  sub.Memory.CursorRulesDir,
+		InjectTargets:   targets,
+		RefreshInterval: sub.EffectiveRefreshInterval().String(),
+		Schedule:        sub.Schedule,
+	}
+	if view.Backend == "" {
+		view.Backend = string(subscription.BackendFile)
+	}
+	if sub.LLM != nil {
+		view.LLMProvider = sub.LLM.Provider
+		view.LLMModel = sub.LLM.Model
+	}
+	return view
+}
+
+func formatSources(sources []event.Source) string {
+	if len(sources) == 0 {
+		return "all"
+	}
+	parts := make([]string, 0, len(sources))
+	for _, s := range sources {
+		parts = append(parts, string(s))
+	}
+	return strings.Join(parts, ",")
+}
+
+// ── oc event ──────────────────────────────────────────────────────────────────
+
+func buildEventCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "event",
+		Short: "Query and manage raw activity events",
+		Long: `Query and manage raw activity events from the local daemon.
+
+Events are the append-only activity facts collected from shells, browsers,
+agent hooks, OS collectors, Git hooks, and other sources.`,
+		Example: `  oc event list --since 5m
+  oc event list --source shell --format json
+  oc event clear --source git --dry-run --format json`,
+	}
+	cmd.AddCommand(buildEventListCmd())
+	cmd.AddCommand(buildEventClearCmd())
+	return cmd
+}
+
+func buildEventListCmd() *cobra.Command {
 	var (
 		source  string
 		project string
@@ -516,17 +772,17 @@ func buildEventsCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "events",
+		Use:   "list",
 		Short: "List recent activity events",
 		Long: `Query recent activity events from the local daemon.
 
 When stdout is not a TTY, output defaults to JSON for agent parsing. Use
 --format table when a human-readable table is explicitly needed.`,
-		Example: `  oc events
-  oc events --since 5m
-  oc events --source shell --project opencontext --since 2h
-  oc events --query "go build" --format json
-  oc events --since 5m --format table`,
+		Example: `  oc event list
+  oc event list --since 5m
+  oc event list --source shell --project opencontext --since 2h
+  oc event list --query "go build" --format json
+  oc event list --since 5m --format table`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := client.New(daemonURL)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -584,17 +840,45 @@ When stdout is not a TTY, output defaults to JSON for agent parsing. Use
 	cmd.Flags().IntVar(&limit, "limit", 50, "maximum events to return")
 	cmd.Flags().StringVar(&query, "query", "", "full-text search query")
 	cmd.Flags().IntVar(&maxSens, "max-sensitivity", 0, "maximum sensitivity to return (1=L1, 2=L2, 3=L3; default: all stored events)")
+	return cmd
+}
 
-	// oc events clear
+func buildEventClearCmd() *cobra.Command {
+	var source string
+	var clearDryRun bool
 	clearCmd := &cobra.Command{
 		Use:   "clear",
 		Short: "Delete stored events",
 		Long: `Delete stored events from the local daemon. Use --source to delete only
 events from one source. This is destructive.`,
-		Example: `  oc events clear           # delete all events
-  oc events clear --source shell  # delete shell events only
-  oc events clear --source browser --format json`,
+		Example: `  oc event clear           # delete all events
+  oc event clear --source shell  # delete shell events only
+  oc event clear --source browser --format json
+  oc event clear --source git --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if clearDryRun {
+				result := map[string]any{
+					"status":     "planned",
+					"action":     "clear",
+					"resource":   "events",
+					"dry_run":    true,
+					"daemon_url": daemonURL,
+				}
+				if source != "" {
+					result["source"] = source
+				} else {
+					result["scope"] = "all"
+				}
+				if jsonOut {
+					return printJSON(result)
+				}
+				if source != "" {
+					fmt.Printf("Events clear dry run for source: %s\n", source)
+				} else {
+					fmt.Println("Events clear dry run for all sources.")
+				}
+				return nil
+			}
 			c := client.New(daemonURL)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -621,15 +905,33 @@ events from one source. This is destructive.`,
 		},
 	}
 	clearCmd.Flags().StringVar(&source, "source", "", "delete events from a specific source (shell|git|os|browser|ide|im)")
-	cmd.AddCommand(clearCmd)
+	clearCmd.Flags().BoolVar(&clearDryRun, "dry-run", false, "preview deletion without deleting events")
+	markSideEffect(clearCmd, true)
+	return clearCmd
+}
 
+// ── oc memory ─────────────────────────────────────────────────────────────────
+
+func buildMemoryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "memory",
+		Short: "Compile memory and manage memory output targets",
+		Long: `Manage agent-readable memory generated from OpenContext events.
+
+Memory is produced from subscriptions. A subscription chooses which events are
+included and where the canonical memory file is written. Targets are additional
+agent files that receive injected memory sections.`,
+		Example: `  oc memory compile --subscription global
+  oc memory target add hermes --dry-run --format json`,
+	}
+	cmd.AddCommand(buildMemoryCompileCmd())
+	cmd.AddCommand(buildMemoryTargetCmd())
 	return cmd
 }
 
-// ── oc compile ────────────────────────────────────────────────────────────────
-
-func buildCompileCmd() *cobra.Command {
+func buildMemoryCompileCmd() *cobra.Command {
 	var subName string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "compile",
@@ -638,10 +940,41 @@ func buildCompileCmd() *cobra.Command {
 
 Compilation is asynchronous. After triggering, inspect the configured
 memory.md path or wait for the raw_dump refresh interval.`,
-		Example: `  oc compile
-  oc compile --subscription opencontext-project
-  oc compile --subscription claudecode-context --format json`,
+		Example: `  oc memory compile
+  oc memory compile --subscription opencontext-project
+  oc memory compile --subscription claudecode-context --format json
+  oc memory compile --subscription opencontext-project --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			subscription := subName
+			if subscription == "" {
+				subscription = "all"
+			}
+			result := sideEffectResult{
+				Status:    "triggered",
+				Action:    "compile",
+				Resource:  "memory",
+				DryRun:    dryRun,
+				DaemonURL: daemonURL,
+				NextSteps: []string{"Check the configured memory.md path after a short delay."},
+			}
+			if dryRun {
+				result.Status = "planned"
+				if jsonOut {
+					return printJSON(map[string]any{
+						"status":       result.Status,
+						"action":       result.Action,
+						"resource":     result.Resource,
+						"dry_run":      true,
+						"daemon_url":   daemonURL,
+						"subscription": subscription,
+						"async":        true,
+						"next_steps":   result.NextSteps,
+					})
+				}
+				fmt.Printf("Memory compile dry run for subscription: %s\n", subscription)
+				fmt.Printf("  daemon: %s\n", daemonURL)
+				return nil
+			}
 			c := client.New(daemonURL)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -651,12 +984,10 @@ memory.md path or wait for the raw_dump refresh interval.`,
 			}
 
 			if jsonOut {
-				subscription := subName
-				if subscription == "" {
-					subscription = "all"
-				}
 				return printJSON(map[string]any{
 					"status":       "triggered",
+					"action":       "compile",
+					"resource":     "memory",
 					"subscription": subscription,
 					"async":        true,
 					"suggestion":   "Check the configured memory.md path after a short delay.",
@@ -674,6 +1005,32 @@ memory.md path or wait for the raw_dump refresh interval.`,
 	}
 
 	cmd.Flags().StringVar(&subName, "subscription", "", "subscription name (default: all)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview compile trigger without contacting the daemon")
+	return markSideEffect(cmd, false)
+}
+
+func buildMemoryTargetCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "target",
+		Short: "Manage additional memory injection targets",
+		Long: `Manage additional memory targets that receive the compiled memory section.
+
+Targets are stored in the selected subscription config as memory.inject_targets.
+They do not compile memory by themselves; run oc memory compile or wait for the
+subscription refresh interval after adding a target.`,
+		Example: `  oc memory target add hermes
+  oc memory target add openclaw --dry-run --format json`,
+	}
+	add := &cobra.Command{
+		Use:   "add",
+		Short: "Add a memory injection target",
+		Long:  `Add an agent memory file as an OpenContext memory injection target.`,
+		Example: `  oc memory target add hermes
+  oc memory target add openclaw --dry-run --format json`,
+	}
+	add.AddCommand(buildInjectHermesCmd())
+	add.AddCommand(buildInjectOpenClawCmd())
+	cmd.AddCommand(add)
 	return cmd
 }
 
@@ -683,14 +1040,25 @@ func buildCollectorCmd() *cobra.Command {
 	collector := &cobra.Command{
 		Use:   "collector",
 		Short: "Collector management subcommands",
-		Long: `Install or operate collector integrations. Most commands under this
-tree make local configuration changes, so agents should inspect the command
-schema first and use --dry-run when available.`,
-		Example: `  oc schema collector shell install --format json
+		Long: `Discover, inspect, install, or operate collector integrations.
+
+Agent workflow:
+  1. oc collector list --format json
+  2. oc collector info <name> --format json
+  3. oc schema collector <name> install --format json
+  4. oc collector <name> install
+
+Most install commands make local configuration changes, so agents should inspect
+the command schema first and use --dry-run when available.`,
+		Example: `  oc collector list --format json
+  oc collector info browser-chrome --format json
+  oc schema collector shell install --format json
   oc collector shell install
-  oc collector claude install
   oc collector browser-chrome install --dry-run`,
 	}
+	collector.AddCommand(buildCollectorListCmd())
+	collector.AddCommand(buildCollectorInfoCmd())
+	collector.AddCommand(buildCollectorSchemasCmd())
 	collector.AddCommand(buildShellCollectorCmd())
 	collector.AddCommand(buildGitCollectorCmd())
 	collector.AddCommand(buildClaudeCollectorCmd())
@@ -802,6 +1170,7 @@ the OpenContext daemon being unavailable.`,
 
 func buildShellInstallCmd() *cobra.Command {
 	var sensitivity int
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -812,27 +1181,47 @@ Sensitivity levels:
   1 (L1) — command name only, e.g. "go" instead of "go build ./..."
   2 (L2, default) — full command string including arguments`,
 		Example: `  oc collector shell install
-  oc collector shell install --sensitivity 2`,
+  oc collector shell install --sensitivity 2
+  oc collector shell install --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.InstallShell(sensitivity)
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "installed",
+				Action:    "install",
+				Collector: "shell",
+				DryRun:    dryRun,
+				Paths:     shellCollectorPaths(),
+				NextSteps: []string{"Restart your shell or source your shell config."},
+			}, dryRun, func() error {
+				return installers.InstallShell(sensitivity)
+			})
 		},
 	}
 
 	cmd.Flags().IntVar(&sensitivity, "sensitivity", 2, "sensitivity level: 1=command name only, 2=full command with args")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview files and shell profiles without writing changes")
 	return cmd
 }
 
 func buildShellUninstallCmd() *cobra.Command {
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove shell hooks from zsh, bash, and PowerShell",
 		Long: `Uninstall removes OpenContext shell hooks from shell configuration files
 (.zshrc, .bashrc, PowerShell profiles) and deletes the hooks directory.`,
-		Example: `  oc collector shell uninstall`,
+		Example: `  oc collector shell uninstall
+  oc collector shell uninstall --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.UninstallShell()
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "uninstalled",
+				Action:    "uninstall",
+				Collector: "shell",
+				DryRun:    dryRun,
+				Paths:     shellCollectorPaths(),
+			}, dryRun, installers.UninstallShell)
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview removed files and profile entries without writing changes")
 	return cmd
 }
 
@@ -859,6 +1248,7 @@ func buildGitInstallCmd() *cobra.Command {
 	var repo string
 	var sensitivity int
 	var daemonAddr string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -870,37 +1260,68 @@ Existing hooks are preserved by moving them to an OpenContext backup path and
 calling them from the generated wrapper. Hooks run non-blocking and should never
 slow down Git if the OpenContext daemon is unavailable.`,
 		Example: `  oc collector git install --repo .
-  oc collector git install --repo /path/to/repo --sensitivity 2`,
+  oc collector git install --repo /path/to/repo --sensitivity 2
+  oc collector git install --repo . --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if repo == "" {
 				repo = "."
 			}
-			return installers.InstallGit(repo, daemonAddr, sensitivity)
+			paths, err := gitCollectorPaths(repo)
+			if err != nil {
+				return err
+			}
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "installed",
+				Action:    "install",
+				Collector: "git",
+				DryRun:    dryRun,
+				DaemonURL: daemonAddr,
+				Paths:     paths,
+				NextSteps: []string{"Make a commit, branch switch, merge, or push, then run: oc event list --source git --since 10m --format json"},
+			}, dryRun, func() error {
+				return installers.InstallGit(repo, daemonAddr, sensitivity)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repo, "repo", ".", "repository path")
 	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
 	cmd.Flags().IntVar(&sensitivity, "sensitivity", 2, "sensitivity level: 1=metadata only, 2=commit messages and stats")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview hook files without writing changes")
 	return cmd
 }
 
 func buildGitUninstallCmd() *cobra.Command {
 	var repo string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove OpenContext Git hooks from a repository",
 		Long:  `Removes OpenContext-generated Git hook wrappers and restores backed-up hooks when present.`,
 		Example: `  oc collector git uninstall --repo .
-  oc collector git uninstall --repo /path/to/repo`,
+  oc collector git uninstall --repo /path/to/repo
+  oc collector git uninstall --repo . --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if repo == "" {
 				repo = "."
 			}
-			return installers.UninstallGit(repo)
+			paths, err := gitCollectorPaths(repo)
+			if err != nil {
+				return err
+			}
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "uninstalled",
+				Action:    "uninstall",
+				Collector: "git",
+				DryRun:    dryRun,
+				Paths:     paths,
+			}, dryRun, func() error {
+				return installers.UninstallGit(repo)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&repo, "repo", ".", "repository path")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview hook removal without writing changes")
 	return cmd
 }
 
@@ -964,32 +1385,55 @@ posted to the OpenContext daemon.`,
 
 func buildClaudeInstallCmd() *cobra.Command {
 	var daemonAddr string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install OpenContext HTTP hooks into Claude Code",
 		Long: `Adds UserPromptSubmit and SessionStart HTTP hooks to Claude Code.
 Claude Code will POST each user message to the OpenContext daemon for recording.`,
+		Example: `  oc collector claude install
+  oc collector claude install --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.InstallClaude(daemonAddr)
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "installed",
+				Action:    "install",
+				Collector: "claude",
+				DryRun:    dryRun,
+				DaemonURL: daemonAddr,
+				Paths:     homePaths(".claude/settings.json"),
+				NextSteps: []string{"Start the daemon with 'oc daemon', then open a Claude Code session."},
+			}, dryRun, func() error {
+				return installers.InstallClaude(daemonAddr)
+			})
 		},
 	}
 
 	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview settings changes without writing files")
 	return cmd
 }
 
 func buildClaudeUninstallCmd() *cobra.Command {
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove OpenContext HTTP hooks from Claude Code settings",
 		Long: `Removes UserPromptSubmit and SessionStart HTTP hook entries from
 ~/.claude/settings.json that point to the OpenContext daemon.`,
-		Example: `  oc collector claude uninstall`,
+		Example: `  oc collector claude uninstall
+  oc collector claude uninstall --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.UninstallClaude()
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "uninstalled",
+				Action:    "uninstall",
+				Collector: "claude",
+				DryRun:    dryRun,
+				Paths:     homePaths(".claude/settings.json"),
+			}, dryRun, installers.UninstallClaude)
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview settings changes without writing files")
 	return cmd
 }
 
@@ -1011,6 +1455,7 @@ posted to the OpenContext daemon.`,
 
 func buildCodexInstallCmd() *cobra.Command {
 	var daemonAddr string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -1020,23 +1465,43 @@ Codex will POST each user message to the OpenContext daemon for recording.
 
 Requires Codex CLI with hooks support (codex >= 0.1.x).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.InstallCodex(daemonAddr)
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "installed",
+				Action:    "install",
+				Collector: "codex",
+				DryRun:    dryRun,
+				DaemonURL: daemonAddr,
+				Paths:     homePaths(".opencontext/collectors/hooks/codex.sh", ".codex/hooks.json"),
+				NextSteps: []string{"Start the daemon with 'oc daemon', then open a Codex session."},
+			}, dryRun, func() error {
+				return installers.InstallCodex(daemonAddr)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview hook files and settings changes without writing files")
 	return cmd
 }
 
 func buildCodexUninstallCmd() *cobra.Command {
+	var dryRun bool
 	cmd := &cobra.Command{
-		Use:     "uninstall",
-		Short:   "Remove OpenContext hooks from Codex CLI",
-		Long:    `Removes hook script files and hook entries from ~/.codex/hooks.json.`,
-		Example: `  oc collector codex uninstall`,
+		Use:   "uninstall",
+		Short: "Remove OpenContext hooks from Codex CLI",
+		Long:  `Removes hook script files and hook entries from ~/.codex/hooks.json.`,
+		Example: `  oc collector codex uninstall
+  oc collector codex uninstall --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.UninstallCodex()
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "uninstalled",
+				Action:    "uninstall",
+				Collector: "codex",
+				DryRun:    dryRun,
+				Paths:     homePaths(".opencontext/collectors/hooks", ".codex/hooks.json"),
+			}, dryRun, installers.UninstallCodex)
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview removed files and settings changes without writing files")
 	return cmd
 }
 
@@ -1058,6 +1523,7 @@ starts are posted to the OpenContext daemon.`,
 
 func buildCursorInstallCmd() *cobra.Command {
 	var daemonAddr string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -1067,23 +1533,43 @@ Cursor will execute the hook script on each user prompt submission.
 
 Requires Cursor IDE with hooks support (Cursor >= 1.0).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.InstallCursor(daemonAddr)
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "installed",
+				Action:    "install",
+				Collector: "cursor",
+				DryRun:    dryRun,
+				DaemonURL: daemonAddr,
+				Paths:     homePaths(".cursor/hooks/oc-capture.sh", ".cursor/hooks.json"),
+				NextSteps: []string{"Reload Cursor. Agent prompts and session starts will be recorded."},
+			}, dryRun, func() error {
+				return installers.InstallCursor(daemonAddr)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview hook files and settings changes without writing files")
 	return cmd
 }
 
 func buildCursorUninstallCmd() *cobra.Command {
+	var dryRun bool
 	cmd := &cobra.Command{
-		Use:     "uninstall",
-		Short:   "Remove OpenContext hooks from Cursor IDE",
-		Long:    `Removes hook script files and hook entries from ~/.cursor/hooks.json.`,
-		Example: `  oc collector cursor uninstall`,
+		Use:   "uninstall",
+		Short: "Remove OpenContext hooks from Cursor IDE",
+		Long:  `Removes hook script files and hook entries from ~/.cursor/hooks.json.`,
+		Example: `  oc collector cursor uninstall
+  oc collector cursor uninstall --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.UninstallCursor()
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "uninstalled",
+				Action:    "uninstall",
+				Collector: "cursor",
+				DryRun:    dryRun,
+				Paths:     homePaths(".cursor/hooks", ".cursor/hooks.json"),
+			}, dryRun, installers.UninstallCursor)
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview removed files and settings changes without writing files")
 	return cmd
 }
 
@@ -1105,6 +1591,7 @@ posted to the OpenContext daemon.`,
 
 func buildOpenCodeInstallCmd() *cobra.Command {
 	var daemonAddr string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -1115,23 +1602,43 @@ OpenCode will execute the hook script on each user message submission.
 Supports both the native opencode hook format and the Claude-compatible
 format (via opencode-claude-hooks npm package).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.InstallOpenCode(daemonAddr)
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "installed",
+				Action:    "install",
+				Collector: "opencode",
+				DryRun:    dryRun,
+				DaemonURL: daemonAddr,
+				Paths:     homePaths(".opencontext/collectors/hooks/opencode.sh", ".config/opencode/hooks.json"),
+				NextSteps: []string{"Start or restart OpenCode. User messages will be recorded."},
+			}, dryRun, func() error {
+				return installers.InstallOpenCode(daemonAddr)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview hook files and settings changes without writing files")
 	return cmd
 }
 
 func buildOpenCodeUninstallCmd() *cobra.Command {
+	var dryRun bool
 	cmd := &cobra.Command{
-		Use:     "uninstall",
-		Short:   "Remove OpenContext hooks from OpenCode",
-		Long:    `Removes hook script files and hook entries from ~/.config/opencode/hooks.json.`,
-		Example: `  oc collector opencode uninstall`,
+		Use:   "uninstall",
+		Short: "Remove OpenContext hooks from OpenCode",
+		Long:  `Removes hook script files and hook entries from ~/.config/opencode/hooks.json.`,
+		Example: `  oc collector opencode uninstall
+  oc collector opencode uninstall --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.UninstallOpenCode()
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "uninstalled",
+				Action:    "uninstall",
+				Collector: "opencode",
+				DryRun:    dryRun,
+				Paths:     homePaths(".opencontext/collectors/hooks", ".config/opencode/hooks.json"),
+			}, dryRun, installers.UninstallOpenCode)
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview removed files and settings changes without writing files")
 	return cmd
 }
 
@@ -1153,6 +1660,7 @@ and session starts are posted to the OpenContext daemon.`,
 
 func buildOpenClawInstallCmd() *cobra.Command {
 	var daemonAddr string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -1167,25 +1675,46 @@ forwarding them to the OpenContext daemon for recording.
 Requires OpenClaw >= 2026.3 with internal hooks support.
 Restart OpenClaw after installation.`,
 		Example: `  oc collector openclaw install
-  oc collector openclaw install --daemon http://127.0.0.1:6060`,
+  oc collector openclaw install --daemon http://127.0.0.1:6060
+  oc collector openclaw install --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.InstallOpenClaw(daemonAddr)
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "installed",
+				Action:    "install",
+				Collector: "openclaw",
+				DryRun:    dryRun,
+				DaemonURL: daemonAddr,
+				Paths:     homePaths(".opencontext/collectors/openclaw-hooks/opencontext", ".opencontext/collectors/openclaw-watcher/watch.py"),
+				NextSteps: []string{"Restart OpenClaw.", "For TUI fallback, run: python3 ~/.opencontext/collectors/openclaw-watcher/watch.py &"},
+			}, dryRun, func() error {
+				return installers.InstallOpenClaw(daemonAddr)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview hook files and config changes without writing files")
 	return cmd
 }
 
 func buildOpenClawUninstallCmd() *cobra.Command {
+	var dryRun bool
 	cmd := &cobra.Command{
-		Use:     "uninstall",
-		Short:   "Remove OpenContext internal hook from OpenClaw",
-		Long:    `Removes the ~/.opencontext/collectors/openclaw-hooks/opencontext/ directory.`,
-		Example: `  oc collector openclaw uninstall`,
+		Use:   "uninstall",
+		Short: "Remove OpenContext internal hook from OpenClaw",
+		Long:  `Removes the ~/.opencontext/collectors/openclaw-hooks/opencontext/ directory.`,
+		Example: `  oc collector openclaw uninstall
+  oc collector openclaw uninstall --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.UninstallOpenClaw()
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "uninstalled",
+				Action:    "uninstall",
+				Collector: "openclaw",
+				DryRun:    dryRun,
+				Paths:     homePaths(".opencontext/collectors/openclaw-hooks/opencontext"),
+			}, dryRun, installers.UninstallOpenClaw)
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview removed files without writing changes")
 	return cmd
 }
 
@@ -1207,6 +1736,7 @@ and session starts are posted to the OpenContext daemon.`,
 
 func buildHermesInstallCmd() *cobra.Command {
 	var daemonAddr string
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -1218,25 +1748,46 @@ forwarding them to the OpenContext daemon for recording.
 Requires Hermes Agent with gateway hook support (hermes >= 0.4).
 Restart the Hermes gateway after installation: hermes gateway`,
 		Example: `  oc collector hermes install
-  oc collector hermes install --daemon http://127.0.0.1:6060`,
+  oc collector hermes install --daemon http://127.0.0.1:6060
+  oc collector hermes install --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.InstallHermes(daemonAddr)
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "installed",
+				Action:    "install",
+				Collector: "hermes",
+				DryRun:    dryRun,
+				DaemonURL: daemonAddr,
+				Paths:     homePaths(".hermes/hooks/opencontext", ".opencontext/collectors/hermes-hooks/oc-hook.sh", ".hermes/config.yaml"),
+				NextSteps: []string{"Restart Hermes with: hermes chat or hermes gateway"},
+			}, dryRun, func() error {
+				return installers.InstallHermes(daemonAddr)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview hook files and config changes without writing files")
 	return cmd
 }
 
 func buildHermesUninstallCmd() *cobra.Command {
+	var dryRun bool
 	cmd := &cobra.Command{
-		Use:     "uninstall",
-		Short:   "Remove OpenContext gateway hook from Hermes Agent",
-		Long:    `Removes the ~/.hermes/hooks/opencontext/ directory.`,
-		Example: `  oc collector hermes uninstall`,
+		Use:   "uninstall",
+		Short: "Remove OpenContext gateway hook from Hermes Agent",
+		Long:  `Removes the ~/.hermes/hooks/opencontext/ directory.`,
+		Example: `  oc collector hermes uninstall
+  oc collector hermes uninstall --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installers.UninstallHermes()
+			return runSideEffectCommand(sideEffectResult{
+				Status:    "uninstalled",
+				Action:    "uninstall",
+				Collector: "hermes",
+				DryRun:    dryRun,
+				Paths:     homePaths(".hermes/hooks/opencontext", ".opencontext/collectors/hermes-hooks/oc-hook.sh"),
+			}, dryRun, installers.UninstallHermes)
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview removed files without writing changes")
 	return cmd
 }
 
@@ -1280,7 +1831,8 @@ directory and prints the exact Firefox UI steps the user must complete.
 
 This is idempotent and safe to rerun.`,
 		Example: `  oc collector browser-firefox install
-  oc collector browser-firefox install --json
+  oc collector browser-firefox install --format json
+  oc collector browser-firefox install --dry-run --format json
   oc collector browser-firefox install --source ./collectors/browser/firefox`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			result, err := installBrowserFirefoxCollector(sourcePath, targetPath, daemonAddr, dryRun)
@@ -1356,7 +1908,7 @@ func installBrowserFirefoxCollector(sourcePath, targetPath, daemonAddr string, d
 			"Click Load Temporary Add-on and select the manifest.json in the extension directory.",
 			"Alternatively: open about:addons, click the gear icon, Install Add-on from file.",
 			"Click the extension icon in the toolbar and set Daemon URL to " + daemonAddr + ".",
-			"Click Send Test Event, then run: oc events --source browser --since 10m.",
+			"Click Send Test Event, then run: oc event list --source browser --since 10m.",
 		},
 	}, nil
 }
@@ -1430,7 +1982,8 @@ directory and prints the exact Chrome UI steps the user must complete.
 This is idempotent and safe to rerun. It does not silently change Chrome
 policy or browser profiles.`,
 		Example: `  oc collector browser-chrome install
-  oc collector browser-chrome install --json
+  oc collector browser-chrome install --format json
+  oc collector browser-chrome install --dry-run --format json
   oc collector browser-chrome install --source ./collectors/browser/chrome`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			result, err := installBrowserChromeCollector(sourcePath, targetPath, daemonAddr, dryRun)
@@ -1507,7 +2060,7 @@ func installBrowserChromeCollector(sourcePath, targetPath, daemonAddr string, dr
 			"Click Load unpacked.",
 			"Select " + targetPath + ".",
 			"Open the OpenContext extension options and set Daemon URL to " + daemonAddr + ".",
-			"Click Send Test Event, then run: oc events --source browser --since 10m.",
+			"Click Send Test Event, then run: oc event list --source browser --since 10m.",
 		},
 	}, nil
 }
@@ -1585,7 +2138,8 @@ directory and prints the exact Edge UI steps the user must complete.
 
 This is idempotent and safe to rerun.`,
 		Example: `  oc collector browser-edge install
-  oc collector browser-edge install --json
+  oc collector browser-edge install --format json
+  oc collector browser-edge install --dry-run --format json
   oc collector browser-edge install --source ./collectors/browser/edge`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			result, err := installBrowserEdgeCollector(sourcePath, targetPath, daemonAddr, dryRun)
@@ -1662,7 +2216,7 @@ func installBrowserEdgeCollector(sourcePath, targetPath, daemonAddr string, dryR
 			"Click Load unpacked.",
 			"Select " + targetPath + ".",
 			"Open the OpenContext extension options and set Daemon URL to " + daemonAddr + ".",
-			"Click Send Test Event, then run: oc events --source browser --since 10m.",
+			"Click Send Test Event, then run: oc event list --source browser --since 10m.",
 		},
 	}, nil
 }
@@ -1979,13 +2533,16 @@ func shortGitHash(s string) string {
 // ── oc schema ────────────────────────────────────────────────────────────────
 
 type commandSchema struct {
-	Command     string       `json:"command"`
-	Use         string       `json:"use"`
-	Description string       `json:"description"`
-	Aliases     []string     `json:"aliases,omitempty"`
-	Flags       []flagSchema `json:"flags,omitempty"`
-	Subcommands []string     `json:"subcommands,omitempty"`
-	Examples    []string     `json:"examples,omitempty"`
+	Command         string       `json:"command"`
+	Use             string       `json:"use"`
+	Description     string       `json:"description"`
+	Aliases         []string     `json:"aliases,omitempty"`
+	SideEffect      bool         `json:"side_effect"`
+	Destructive     bool         `json:"destructive"`
+	DryRunSupported bool         `json:"dry_run_supported"`
+	Flags           []flagSchema `json:"flags,omitempty"`
+	Subcommands     []string     `json:"subcommands,omitempty"`
+	Examples        []string     `json:"examples,omitempty"`
 }
 
 type flagSchema struct {
@@ -2008,7 +2565,8 @@ Agents should prefer this command over scraping help text when they need
 available subcommands, flags, defaults, value domains, and examples.`,
 		Example: `  oc schema
   oc schema collector browser-chrome install
-  oc schema events`,
+  oc schema event list
+  oc schema subscription list`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target, err := findCommandForSchema(root, args)
 			if err != nil {
@@ -2043,12 +2601,15 @@ func findCommandForSchema(root *cobra.Command, path []string) (*cobra.Command, e
 
 func buildCommandSchema(cmd *cobra.Command) commandSchema {
 	s := commandSchema{
-		Command:     commandPath(cmd),
-		Use:         cmd.UseLine(),
-		Description: strings.TrimSpace(cmd.Short),
-		Aliases:     cmd.Aliases,
-		Flags:       collectFlagSchemas(cmd),
-		Examples:    splitExamples(cmd.Example),
+		Command:         commandPath(cmd),
+		Use:             cmd.UseLine(),
+		Description:     strings.TrimSpace(cmd.Short),
+		Aliases:         cmd.Aliases,
+		SideEffect:      annotationBool(cmd, "side_effect") || commandHasFlag(cmd, "dry-run"),
+		Destructive:     annotationBool(cmd, "destructive") || cmd.Name() == "uninstall" || cmd.Name() == "clear",
+		DryRunSupported: commandHasFlag(cmd, "dry-run"),
+		Flags:           collectFlagSchemas(cmd),
+		Examples:        splitExamples(cmd.Example),
 	}
 	for _, child := range cmd.Commands() {
 		if child.Hidden {
@@ -2058,6 +2619,33 @@ func buildCommandSchema(cmd *cobra.Command) commandSchema {
 	}
 	sort.Strings(s.Subcommands)
 	return s
+}
+
+func markSideEffect(cmd *cobra.Command, destructive bool) *cobra.Command {
+	if cmd.Annotations == nil {
+		cmd.Annotations = map[string]string{}
+	}
+	cmd.Annotations["side_effect"] = "true"
+	if destructive {
+		cmd.Annotations["destructive"] = "true"
+	}
+	return cmd
+}
+
+func annotationBool(cmd *cobra.Command, key string) bool {
+	if cmd == nil || cmd.Annotations == nil {
+		return false
+	}
+	return cmd.Annotations[key] == "true"
+}
+
+func commandHasFlag(cmd *cobra.Command, name string) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Flags().Lookup(name) != nil || c.PersistentFlags().Lookup(name) != nil || c.InheritedFlags().Lookup(name) != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func collectFlagSchemas(cmd *cobra.Command) []flagSchema {
@@ -2085,8 +2673,10 @@ func collectFlagSchemas(cmd *cobra.Command) []flagSchema {
 		addFlagSet(c.PersistentFlags())
 		addFlagSet(c.InheritedFlags())
 	}
-	for c := cmd; c != nil; c = c.Parent() {
-		addFlags(c)
+	addFlags(cmd)
+	for c := cmd.Parent(); c != nil; c = c.Parent() {
+		addFlagSet(c.PersistentFlags())
+		addFlagSet(c.InheritedFlags())
 	}
 	sort.Slice(flags, func(i, j int) bool { return flags[i].Name < flags[j].Name })
 	return flags
@@ -2142,38 +2732,12 @@ func enumFromUsage(usage string) []string {
 	return nil
 }
 
-// ── oc inject ─────────────────────────────────────────────────────────────────
-
-func buildInjectCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "inject",
-		Short: "Inject OpenContext memory into third-party AI agent files",
-		Long: `Adds an inject_targets entry to your OpenContext subscription config
-so that memory.md is automatically pushed into the target agent's
-memory file (Hermes MEMORY.md, OpenClaw MEMORY.md, etc.) on every
-refresh cycle.
-
-The injected block is wrapped in HTML comment markers so the agent's
-own memory is never overwritten:
-
-  <!-- opencontext:start -->
-  ## OpenContext — Recent Activity
-  ...generated content...
-  <!-- opencontext:end -->`,
-		Example: `  oc inject hermes
-  oc inject openclaw
-  oc inject hermes --memory ~/.hermes/memories/MEMORY.md`,
-	}
-	cmd.AddCommand(buildInjectHermesCmd())
-	cmd.AddCommand(buildInjectOpenClawCmd())
-	return cmd
-}
-
 func buildInjectHermesCmd() *cobra.Command {
 	var (
 		memoryPath string
 		header     string
 		configFile string
+		dryRun     bool
 	)
 
 	cmd := &cobra.Command{
@@ -2186,11 +2750,12 @@ maintain an "OpenContext — Recent Activity" section in that file.
 Hermes also reads .hermes.md / AGENTS.md / CLAUDE.md from the project
 directory — those files are already populated if you have a project
 subscription with claude_md configured.`,
-		Example: `  oc inject hermes
-  oc inject hermes --memory ~/.hermes/memories/MEMORY.md
-  oc inject hermes --header "## Recent Dev Activity"`,
+		Example: `  oc memory target add hermes
+  oc memory target add hermes --memory ~/.hermes/memories/MEMORY.md
+  oc memory target add hermes --header "## Recent Dev Activity"
+  oc memory target add hermes --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installInjectTarget("hermes", memoryPath, header, configFile)
+			return runInjectTarget("hermes", memoryPath, header, configFile, dryRun)
 		},
 	}
 
@@ -2198,7 +2763,8 @@ subscription with claude_md configured.`,
 	cmd.Flags().StringVar(&memoryPath, "memory", filepath.Join(home, ".hermes", "memories", "MEMORY.md"), "path to Hermes MEMORY.md")
 	cmd.Flags().StringVar(&header, "header", "## OpenContext — Recent Activity", "section heading inside the injected block")
 	cmd.Flags().StringVar(&configFile, "config", "", "OpenContext config file (default: ~/.opencontext/config.yaml)")
-	return cmd
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview config patch without writing files")
+	return markSideEffect(cmd, false)
 }
 
 func buildInjectOpenClawCmd() *cobra.Command {
@@ -2206,6 +2772,7 @@ func buildInjectOpenClawCmd() *cobra.Command {
 		memoryPath string
 		header     string
 		configFile string
+		dryRun     bool
 	)
 
 	cmd := &cobra.Command{
@@ -2216,11 +2783,12 @@ OpenContext subscription config. After the next refresh cycle,
 OpenContext will maintain an "OpenContext — Recent Activity" section
 in that file.
 
-If your OpenClaw agents use a custom workspace path, pass it with --memory.`,
-		Example: `  oc inject openclaw
-  oc inject openclaw --memory ~/.openclaw/my-agent/MEMORY.md`,
+	If your OpenClaw agents use a custom workspace path, pass it with --memory.`,
+		Example: `  oc memory target add openclaw
+  oc memory target add openclaw --memory ~/.openclaw/my-agent/MEMORY.md
+  oc memory target add openclaw --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return installInjectTarget("openclaw", memoryPath, header, configFile)
+			return runInjectTarget("openclaw", memoryPath, header, configFile, dryRun)
 		},
 	}
 
@@ -2228,7 +2796,46 @@ If your OpenClaw agents use a custom workspace path, pass it with --memory.`,
 	cmd.Flags().StringVar(&memoryPath, "memory", filepath.Join(home, ".openclaw", "workspace", "MEMORY.md"), "path to OpenClaw MEMORY.md")
 	cmd.Flags().StringVar(&header, "header", "## OpenContext — Recent Activity", "section heading inside the injected block")
 	cmd.Flags().StringVar(&configFile, "config", "", "OpenContext config file (default: ~/.opencontext/config.yaml)")
-	return cmd
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview config patch without writing files")
+	return markSideEffect(cmd, false)
+}
+
+func runInjectTarget(tool, memoryPath, header, configFile string, dryRun bool) error {
+	resolvedConfig := configFile
+	if resolvedConfig == "" {
+		home, _ := os.UserHomeDir()
+		resolvedConfig = filepath.Join(home, ".opencontext", "config.yaml")
+	}
+	result := sideEffectResult{
+		Status:   "installed",
+		Action:   "target_add",
+		Resource: tool,
+		DryRun:   dryRun,
+		Paths:    compactStrings([]string{resolvedConfig, expandHome(memoryPath)}),
+		NextSteps: []string{
+			"Restart the OpenContext daemon or wait for config reload.",
+			"Run: oc memory compile --format json",
+		},
+	}
+	if dryRun {
+		result.Status = "planned"
+		if jsonOut {
+			return printJSON(result)
+		}
+		printSideEffectPlan(result)
+		return nil
+	}
+	if jsonOut {
+		output, err := captureStdout(func() error {
+			return installInjectTarget(tool, memoryPath, header, configFile)
+		})
+		if err != nil {
+			return err
+		}
+		result.Output = strings.TrimSpace(output)
+		return printJSON(result)
+	}
+	return installInjectTarget(tool, memoryPath, header, configFile)
 }
 
 // installInjectTarget patches the first raw_dump subscription in config.yaml
@@ -2301,6 +2908,188 @@ func installInjectTarget(tool, memoryPath, header, configFile string) error {
 }
 
 // ── output helpers ────────────────────────────────────────────────────────────
+
+type sideEffectResult struct {
+	Status    string   `json:"status"`
+	Action    string   `json:"action"`
+	Resource  string   `json:"resource,omitempty"`
+	Collector string   `json:"collector,omitempty"`
+	DryRun    bool     `json:"dry_run"`
+	Platform  string   `json:"platform,omitempty"`
+	DaemonURL string   `json:"daemon_url,omitempty"`
+	Paths     []string `json:"paths,omitempty"`
+	NextSteps []string `json:"next_steps,omitempty"`
+	Output    string   `json:"output,omitempty"`
+}
+
+func runSideEffectCommand(result sideEffectResult, dryRun bool, action func() error) error {
+	if dryRun {
+		result.Status = "planned"
+		if jsonOut {
+			return printJSON(result)
+		}
+		printSideEffectPlan(result)
+		return nil
+	}
+	if jsonOut {
+		output, err := captureStdout(action)
+		if err != nil {
+			return err
+		}
+		result.Output = strings.TrimSpace(output)
+		return printJSON(result)
+	}
+	return action()
+}
+
+func printSideEffectPlan(result sideEffectResult) {
+	target := result.Collector
+	if target == "" {
+		target = result.Resource
+	}
+	if target == "" {
+		target = result.Action
+	}
+	fmt.Printf("%s %s dry run.\n", titleCase(target), result.Action)
+	if result.Platform != "" {
+		fmt.Printf("  platform: %s\n", result.Platform)
+	}
+	if result.DaemonURL != "" {
+		fmt.Printf("  daemon: %s\n", result.DaemonURL)
+	}
+	if len(result.Paths) > 0 {
+		fmt.Println("  paths:")
+		for _, p := range result.Paths {
+			fmt.Printf("    %s\n", p)
+		}
+	}
+	if len(result.NextSteps) > 0 {
+		fmt.Println("  next steps:")
+		for _, step := range result.NextSteps {
+			fmt.Printf("    %s\n", step)
+		}
+	}
+}
+
+func captureStdout(action func() error) (string, error) {
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", err
+	}
+	os.Stdout = w
+	actionErr := action()
+	_ = w.Close()
+	os.Stdout = orig
+	out, readErr := io.ReadAll(r)
+	_ = r.Close()
+	if actionErr != nil {
+		return "", actionErr
+	}
+	if readErr != nil {
+		return "", readErr
+	}
+	return string(out), nil
+}
+
+func homePaths(parts ...string) []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return parts
+	}
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		out = append(out, filepath.Join(home, p))
+	}
+	return out
+}
+
+func shellCollectorPaths() []string {
+	return homePaths(
+		".opencontext/collectors/shell/hooks.zsh",
+		".opencontext/collectors/shell/hooks.bash",
+		".opencontext/collectors/shell/hooks.ps1",
+		".zshrc",
+		".bashrc",
+		"Documents/PowerShell/Microsoft.PowerShell_profile.ps1",
+		"Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1",
+	)
+}
+
+func gitCollectorPaths(repo string) ([]string, error) {
+	repoRoot := gitOutput(repo, "rev-parse", "--show-toplevel")
+	if repoRoot == "" {
+		return nil, fmt.Errorf("not a git repository: %s", repo)
+	}
+	gitDir := gitOutput(repoRoot, "rev-parse", "--git-dir")
+	if gitDir == "" {
+		return nil, fmt.Errorf("resolve git dir: %s", repo)
+	}
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(repoRoot, gitDir)
+	}
+	hooksDir := filepath.Join(gitDir, "hooks")
+	return []string{
+		filepath.Join(hooksDir, "post-commit"),
+		filepath.Join(hooksDir, "post-checkout"),
+		filepath.Join(hooksDir, "post-merge"),
+		filepath.Join(hooksDir, "pre-push"),
+		filepath.Join(hooksDir, ".opencontext-backup"),
+	}, nil
+}
+
+func daemonInstallPaths(cfg service.Config) []string {
+	paths := []string{
+		cfg.BinaryPath,
+		cfg.WorkDir,
+		cfg.LogFile,
+		filepath.Join(service.DefaultDataDir(), "daemon.json"),
+	}
+	if cfg.ConfigFile != "" {
+		paths = append(paths, cfg.ConfigFile)
+	}
+	paths = append(paths, daemonPlatformPaths()...)
+	return compactStrings(paths)
+}
+
+func daemonUninstallPaths() []string {
+	return compactStrings(append([]string{filepath.Join(service.DefaultDataDir(), "daemon.json")}, daemonPlatformPaths()...))
+}
+
+func daemonPlatformPaths() []string {
+	home, _ := os.UserHomeDir()
+	switch {
+	case runtime.GOOS == "darwin":
+		return []string{filepath.Join(home, "Library", "LaunchAgents", "opencontext.plist")}
+	case runtime.GOOS == "windows":
+		return []string{filepath.Join(service.DefaultDataDir(), "opencontext-daemon.ps1")}
+	case os.Getuid() == 0:
+		return []string{"/etc/systemd/system/opencontext.service"}
+	default:
+		return []string{filepath.Join(home, ".config", "systemd", "user", "opencontext.service")}
+	}
+}
+
+func compactStrings(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, s := range in {
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
+}
+
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	s = strings.ReplaceAll(s, "_", " ")
+	return strings.ToUpper(s[:1]) + s[1:]
+}
 
 func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)

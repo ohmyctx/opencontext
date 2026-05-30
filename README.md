@@ -146,7 +146,8 @@ subscriptions:
 Compile once and check the output:
 
 ```bash
-oc compile
+oc memory compile
+oc subscription list
 cat ~/.opencontext/memory.md
 ```
 
@@ -177,7 +178,7 @@ Service management uses launchd on macOS, systemd on Linux when available, and a
 | macOS activity | see [docs/COLLECTOR_INSTALL.md](docs/COLLECTOR_INSTALL.md) | optional external collector |
 | Windows activity | see [docs/COLLECTOR_INSTALL.md](docs/COLLECTOR_INSTALL.md) | optional external collector |
 
-Run `oc collectors list` and `oc collectors info <name>` to inspect collector manifest, version, emitted sources, install command, and schema references.
+Run `oc collector list` and `oc collector info <name>` to inspect collector manifest, version, emitted sources, install command, and schema references.
 
 ## Privacy
 

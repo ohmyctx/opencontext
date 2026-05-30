@@ -54,6 +54,134 @@ func TestSchemaIncludesBrowserChromeInstallFlags(t *testing.T) {
 	}
 }
 
+func TestCollectorInstallSchemasExposeDryRun(t *testing.T) {
+	root := buildRoot()
+	for _, path := range [][]string{
+		{"collector", "shell", "install"},
+		{"collector", "git", "install"},
+		{"collector", "claude", "install"},
+		{"collector", "codex", "install"},
+		{"collector", "cursor", "install"},
+		{"collector", "opencode", "install"},
+		{"collector", "openclaw", "install"},
+		{"collector", "hermes", "install"},
+		{"collector", "browser-chrome", "install"},
+	} {
+		cmd, err := findCommandForSchema(root, path)
+		if err != nil {
+			t.Fatalf("findCommandForSchema(%v) error = %v", path, err)
+		}
+		schema := buildCommandSchema(cmd)
+		if !schemaHasFlag(schema, "--dry-run") {
+			t.Fatalf("expected %s to expose --dry-run", schema.Command)
+		}
+		if !schemaHasFlag(schema, "--format") {
+			t.Fatalf("expected %s to expose --format", schema.Command)
+		}
+	}
+}
+
+func TestSideEffectSchemasExposeRiskMetadata(t *testing.T) {
+	root := buildRoot()
+	cases := []struct {
+		path        []string
+		destructive bool
+	}{
+		{[]string{"daemon", "install"}, false},
+		{[]string{"daemon", "uninstall"}, true},
+		{[]string{"daemon", "restart"}, true},
+		{[]string{"memory", "compile"}, false},
+		{[]string{"memory", "target", "add", "hermes"}, false},
+		{[]string{"event", "clear"}, true},
+		{[]string{"collector", "git", "uninstall"}, true},
+	}
+	for _, tc := range cases {
+		cmd, err := findCommandForSchema(root, tc.path)
+		if err != nil {
+			t.Fatalf("findCommandForSchema(%v) error = %v", tc.path, err)
+		}
+		schema := buildCommandSchema(cmd)
+		if !schema.SideEffect {
+			t.Fatalf("expected %s to be marked side_effect", schema.Command)
+		}
+		if !schema.DryRunSupported {
+			t.Fatalf("expected %s to support dry-run", schema.Command)
+		}
+		if schema.Destructive != tc.destructive {
+			t.Fatalf("%s destructive = %v, want %v", schema.Command, schema.Destructive, tc.destructive)
+		}
+	}
+}
+
+func TestSchemaDoesNotInheritParentLocalFlags(t *testing.T) {
+	root := buildRoot()
+	cmd, err := findCommandForSchema(root, []string{"event", "clear"})
+	if err != nil {
+		t.Fatalf("findCommandForSchema() error = %v", err)
+	}
+	schema := buildCommandSchema(cmd)
+	if schemaHasFlag(schema, "--limit") {
+		t.Fatal("did not expect event clear schema to inherit event list --limit flag")
+	}
+	if !schemaHasFlag(schema, "--source") {
+		t.Fatal("expected event clear schema to include its own --source flag")
+	}
+	if !schemaHasFlag(schema, "--format") {
+		t.Fatal("expected event clear schema to include global --format flag")
+	}
+}
+
+func TestRootSchemaUsesSingularCollectorCommand(t *testing.T) {
+	schema := buildCommandSchema(buildRoot())
+	if !containsString(schema.Subcommands, "collector") {
+		t.Fatal("expected root schema to expose collector command")
+	}
+	for _, name := range []string{"event", "memory", "subscription"} {
+		if !containsString(schema.Subcommands, name) {
+			t.Fatalf("expected root schema to expose %q command", name)
+		}
+	}
+	if containsString(schema.Subcommands, "collectors") {
+		t.Fatal("did not expect deprecated collectors command in root schema")
+	}
+	for _, name := range []string{"events", "compile", "inject"} {
+		if containsString(schema.Subcommands, name) {
+			t.Fatalf("did not expect deprecated top-level %q command in root schema", name)
+		}
+	}
+}
+
+func TestSubscriptionSchemaIncludesDiscoveryVerbs(t *testing.T) {
+	root := buildRoot()
+	cmd, err := findCommandForSchema(root, []string{"subscription"})
+	if err != nil {
+		t.Fatalf("findCommandForSchema() error = %v", err)
+	}
+	schema := buildCommandSchema(cmd)
+	for _, name := range []string{"list", "info"} {
+		if !containsString(schema.Subcommands, name) {
+			t.Fatalf("expected subscription schema to include %q, got %#v", name, schema.Subcommands)
+		}
+	}
+	if schema.SideEffect {
+		t.Fatal("subscription inspection should not be marked side_effect")
+	}
+}
+
+func TestCollectorSchemaIncludesDiscoveryVerbs(t *testing.T) {
+	root := buildRoot()
+	cmd, err := findCommandForSchema(root, []string{"collector"})
+	if err != nil {
+		t.Fatalf("findCommandForSchema() error = %v", err)
+	}
+	schema := buildCommandSchema(cmd)
+	for _, name := range []string{"list", "info", "schemas", "shell", "git"} {
+		if !containsString(schema.Subcommands, name) {
+			t.Fatalf("expected collector schema to include %q, got %#v", name, schema.Subcommands)
+		}
+	}
+}
+
 func TestConfigureOutputModeDefaultsToJSONForNonTTY(t *testing.T) {
 	oldFormat := outputFormat
 	oldJSON := jsonOut

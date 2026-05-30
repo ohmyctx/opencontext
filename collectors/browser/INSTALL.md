@@ -84,7 +84,7 @@ All capture options are enabled by default at sensitivity L2. Text input is capt
 ## Verify
 
 ```bash
-oc events --source browser --since 10m
+oc event list --source browser --since 10m
 ```
 
 ## Browser Compatibility

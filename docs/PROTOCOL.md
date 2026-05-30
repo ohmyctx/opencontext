@@ -272,7 +272,7 @@ Response `200 OK`:
 }
 ```
 
-### 4.4 Query Events (for `oc events` CLI command)
+### 4.4 Query Events (for `oc event list` CLI command)
 
 ```
 GET /api/v1/events?source=shell&project=opencontext&since=2h&limit=50

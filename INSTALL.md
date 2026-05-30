@@ -106,17 +106,21 @@ These checks only indicate that a Chrome-like binary exists. Still ask the user 
 ```bash
 oc schema --format json
 oc schema collector browser-chrome install --format json
-oc collectors list --format json
-oc collectors info browser-chrome --format json
+oc collector list --format json
+oc collector info browser-chrome --format json
 oc status --format json
+oc subscription list --format json
+oc event list --since 30m --format json
 ```
 
 Rules for agents:
 
 - In non-TTY execution, `oc` defaults to JSON output. Still pass `--format json` when the surrounding workflow depends on machine-readable output, because it documents intent.
 - Use `--format table` only when the user explicitly wants human-readable tables.
+- For side-effect commands such as daemon service management, collector install/uninstall, memory compile triggers, event deletion, and inject target setup, run `--dry-run --format json` first when supported, then run the same command without `--dry-run` after the user confirms.
+- Inspect `oc schema <command...> --format json`; side-effect commands expose `side_effect`, `destructive`, and `dry_run_supported` when applicable.
 - OS activity events use `source: "os"` and include `labels.platform` (`macos` or `windows`) plus `labels.collector`, `labels.collector_version`, and `labels.host`.
-- Clipboard events are L3. Query with `oc events --source os --max-sensitivity 3 --format json`, and only set subscription `max_sensitivity: 3` after explicit user consent.
+- Clipboard events are L3. Query with `oc event list --source os --max-sensitivity 3 --format json`, and only set subscription `max_sensitivity: 3` after explicit user consent.
 - Use long flags only, for example `--subscription`, `--source`, `--since`, `--daemon`.
 - Before running a side-effect command, inspect it with `oc schema <command...> --format json`.
 - For commands with `--dry-run`, run the dry run first and show the user what will change.
@@ -171,6 +175,7 @@ oc daemon
 For a persistent background service, prefer:
 
 ```bash
+oc daemon install --dry-run --format json
 oc daemon install
 ```
 
@@ -199,10 +204,10 @@ Continue only after `oc status` reports `status: ok`.
 The agent may inspect available collectors first:
 
 ```bash
-oc collectors list
-oc collectors info shell
-oc collectors info browser-chrome
-oc collectors schemas
+oc collector list
+oc collector info shell
+oc collector info browser-chrome
+oc collector schemas
 ```
 
 Run only the commands matching the user's choices:
@@ -216,12 +221,19 @@ oc collector cursor install
 oc collector opencode install
 ```
 
+Recommended agent pattern for each selected collector:
+
+```bash
+oc collector <name> install --dry-run --format json
+oc collector <name> install --format json
+```
+
 **For Windows users:** The shell collector installs PowerShell hooks automatically (no bash/zsh on Windows). PowerShell 5.1+ is required. After install, open a new PowerShell window — the hook loads via the profile and commands will be captured.
 
 **For Git:** install the collector once per repository where the user wants Git activity captured. Existing hooks are moved under `.git/hooks/.opencontext-backup/` and called by the generated wrapper. Verify after making a test commit or branch switch:
 
 ```bash
-oc events --source git --since 10m --format json
+oc event list --source git --since 10m --format json
 ```
 
 ### Hermes Agent
@@ -248,7 +260,7 @@ hermes gateway
 Verify that events arrive:
 
 ```bash
-oc events --source hermes --since 10m --format json
+oc event list --source hermes --since 10m --format json
 ```
 
 If no events appear after sending a message, check that `hooks_auto_accept: true` is present in `~/.hermes/config.yaml` (the installer adds it automatically).
@@ -301,7 +313,7 @@ python3 ~/.opencontext/collectors/openclaw-watcher/watch.py &>/dev/null &
 Verify events arrive after sending a message in OpenClaw:
 
 ```bash
-oc events --source openclaw --since 10m --format json
+oc event list --source openclaw --since 10m --format json
 ```
 
 If the user selected Chrome browser and has Chrome installed, prepare the unpacked extension:
@@ -322,7 +334,7 @@ This copies the extension to a stable local directory and prints `extension_path
 Then verify:
 
 ```bash
-oc events --source browser --since 10m --format json
+oc event list --source browser --since 10m --format json
 ```
 
 If `oc collector browser-chrome install` cannot find the extension source, clone the repo and pass `--source`:
@@ -652,13 +664,19 @@ subscriptions:
 Trigger compilation:
 
 ```bash
-oc compile
+oc memory compile
+```
+
+Preview compile triggers without contacting the daemon:
+
+```bash
+oc memory compile --dry-run --format json
 ```
 
 Then verify:
 
 ```bash
-oc events --since 24h
+oc event list --since 24h
 test -f ~/.opencontext/memory.md && sed -n '1,80p' ~/.opencontext/memory.md
 ```
 
@@ -694,7 +712,7 @@ grep -A6 "^hooks:" ~/.hermes/config.yaml
 grep "hooks_auto_accept" ~/.hermes/config.yaml
 
 # After sending one message in hermes chat:
-oc events --source hermes --since 5m --format json
+oc event list --source hermes --since 5m --format json
 ```
 
 Expected: at least one `user_message` event with `source: "hermes"`.
@@ -711,7 +729,7 @@ openclaw hooks list   # should show "opencontext" ✓ ready
 pgrep -f "openclaw-watcher/watch.py" && echo "watcher running"
 
 # After sending one message in openclaw TUI:
-oc events --source openclaw --since 5m --format json
+oc event list --source openclaw --since 5m --format json
 ```
 
 Expected: at least one `user_message` event with `source: "openclaw"`.

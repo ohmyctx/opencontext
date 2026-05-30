@@ -46,26 +46,26 @@ Only start or install the daemon after the user confirms.
 Default to L1/L2 events unless the user asks for sensitive context.
 
 ```bash
-oc events --since 30m --format json
+oc event list --since 30m --format json
 ```
 
 Useful focused queries:
 
 ```bash
-oc events --source shell --since 2h --format json
-oc events --source browser --since 1h --format json
-oc events --source os --since 30m --format json
-oc events --source claude --since 24h --format json
-oc events --source codex --since 24h --format json
-oc events --source cursor --since 24h --format json
-oc events --source opencode --since 24h --format json
-oc events --source hermes --since 24h --format json
+oc event list --source shell --since 2h --format json
+oc event list --source browser --since 1h --format json
+oc event list --source os --since 30m --format json
+oc event list --source claude --since 24h --format json
+oc event list --source codex --since 24h --format json
+oc event list --source cursor --since 24h --format json
+oc event list --source opencode --since 24h --format json
+oc event list --source hermes --since 24h --format json
 ```
 
 OS events use `labels.platform` to distinguish machines:
 
 ```bash
-oc events --source os --since 30m --format json
+oc event list --source os --since 30m --format json
 ```
 
 Look for:
@@ -86,7 +86,7 @@ Ask first:
 If the user agrees:
 
 ```bash
-oc events --since 30m --max-sensitivity 3 --format json
+oc event list --since 30m --max-sensitivity 3 --format json
 ```
 
 For screenshots, events contain only a local path:
@@ -111,8 +111,8 @@ Only install collectors after asking which sources the user wants.
 Discovery:
 
 ```bash
-oc collectors list --format json
-oc collectors info shell --format json
+oc collector list --format json
+oc collector info shell --format json
 ```
 
 Common installs:
@@ -152,8 +152,8 @@ Subscription injection can still be useful for continuous memory, but it is more
 If no events are returned:
 
 1. Check daemon health: `oc status --format json`.
-2. Check collectors: `oc collectors list --format json`.
-3. Query a wider window: `oc events --since 24h --format json`.
+2. Check collectors: `oc collector list --format json`.
+3. Query a wider window: `oc event list --since 24h --format json`.
 4. For OS collectors, permissions may be missing.
 5. For browser extensions, the user may need to load or enable the extension.
 

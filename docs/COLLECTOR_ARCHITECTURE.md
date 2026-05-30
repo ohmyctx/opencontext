@@ -158,10 +158,10 @@ Later this can be backed by dynamic manifests from `~/.opencontext/collectors.d/
 The CLI should expose:
 
 ```bash
-oc collectors list
-oc collectors info <name>
-oc collectors schemas
-oc collectors schemas --json
+oc collector list
+oc collector info <name>
+oc collector schemas
+oc collector schemas --format json
 ```
 
 This lets agents discover available integrations and their schemas without reading source code.
@@ -177,7 +177,7 @@ Those endpoints return the same manifest and schema metadata to local agents tha
 
 ## Event Display Rule
 
-`oc events` must be generic.
+`oc event list` must be generic.
 
 Preferred summary order:
 

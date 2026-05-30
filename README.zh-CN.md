@@ -143,7 +143,7 @@ subscriptions:
 编译一次并验证：
 
 ```bash
-oc compile
+oc memory compile
 cat ~/.opencontext/memory.md
 ```
 

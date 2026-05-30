@@ -591,7 +591,7 @@ The schema appears in the `## Event Type Reference` table in `memory.md`, giving
 
 ### Schema registration via HTTP (future)
 
-A `POST /api/v1/schemas` endpoint is planned for collectors that are not written in Go. Until then, external collectors can run without schema registration; open a PR to add built-in schema metadata only when the collector should be discoverable through `oc collectors schemas`.
+A `POST /api/v1/schemas` endpoint is planned for collectors that are not written in Go. Until then, external collectors can run without schema registration; open a PR to add built-in schema metadata only when the collector should be discoverable through `oc collector schemas`.
 
 ---
 
@@ -624,7 +624,7 @@ curl -sf -X POST http://localhost:6060/api/v1/events \
   }'
 
 # 3. Verify it was stored
-oc events --source docker --since 5m
+oc event list --source docker --since 5m
 
 # 4. Trigger a memory rebuild
 curl -X POST http://localhost:6060/api/v1/compile \

@@ -7,9 +7,9 @@
 Inspect available collector manifests from `oc`:
 
 ```bash
-oc collectors list
-oc collectors info macos
-oc collectors info windows
+oc collector list
+oc collector info macos
+oc collector info windows
 ```
 
 Bundled collectors are installed by the `oc` binary:
@@ -157,7 +157,7 @@ After reinstalling, remove stale OpenContext Collector rows and add the app agai
 
 Do not rely on SSH for permission verification (`verified: false` is expected).
 
-Clipboard events are `sensitivity: 3`. If they are visible with `oc events --source os --max-sensitivity 3` but absent from generated memory, update the selected subscription's `filter.max_sensitivity` to `3` only after the user explicitly agrees to L3 capture.
+Clipboard events are `sensitivity: 3`. If they are visible with `oc event list --source os --max-sensitivity 3` but absent from generated memory, update the selected subscription's `filter.max_sensitivity` to `3` only after the user explicitly agrees to L3 capture.
 
 Configuration should live at:
 
@@ -358,13 +358,13 @@ After installing any collector:
 
 ```bash
 oc status
-oc events --since 10m
+oc event list --since 10m
 ```
 
 For OS collectors:
 
 ```bash
-oc events --source os --since 10m --max-sensitivity 3
+oc event list --source os --since 10m --max-sensitivity 3
 ```
 
 If no events appear:

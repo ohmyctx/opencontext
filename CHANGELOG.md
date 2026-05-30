@@ -44,7 +44,7 @@ All notable changes to this project will be documented in this file.
   - More flexible: filter by any label key=value pair
   - Project label still works via `label_selectors.project`
 - **Default `refresh_interval`**: Changed from 1800s (30min) to 300s (5min)
-- **Removed unused `platform` column**: `oc events` table output no longer shows empty platform field
+- **Removed unused `platform` column**: `oc event list` table output no longer shows empty platform field
 
 ### Changed (Internal)
 - PowerShell hook: simplified `shellHookPwsh` with `strings.Builder` removal
