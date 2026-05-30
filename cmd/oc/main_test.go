@@ -91,7 +91,7 @@ func TestSideEffectSchemasExposeRiskMetadata(t *testing.T) {
 		{[]string{"daemon", "uninstall"}, true},
 		{[]string{"daemon", "restart"}, true},
 		{[]string{"memory", "compile"}, false},
-		{[]string{"memory", "target", "add", "hermes"}, false},
+		{[]string{"subscription", "target", "add", "hermes"}, false},
 		{[]string{"event", "clear"}, true},
 		{[]string{"collector", "git", "uninstall"}, true},
 	}
@@ -158,13 +158,28 @@ func TestSubscriptionSchemaIncludesDiscoveryVerbs(t *testing.T) {
 		t.Fatalf("findCommandForSchema() error = %v", err)
 	}
 	schema := buildCommandSchema(cmd)
-	for _, name := range []string{"list", "info"} {
+	for _, name := range []string{"list", "info", "target"} {
 		if !containsString(schema.Subcommands, name) {
 			t.Fatalf("expected subscription schema to include %q, got %#v", name, schema.Subcommands)
 		}
 	}
 	if schema.SideEffect {
 		t.Fatal("subscription inspection should not be marked side_effect")
+	}
+}
+
+func TestMemorySchemaDoesNotOwnSubscriptionTargets(t *testing.T) {
+	root := buildRoot()
+	cmd, err := findCommandForSchema(root, []string{"memory"})
+	if err != nil {
+		t.Fatalf("findCommandForSchema() error = %v", err)
+	}
+	schema := buildCommandSchema(cmd)
+	if containsString(schema.Subcommands, "target") {
+		t.Fatalf("did not expect memory schema to expose subscription target management: %#v", schema.Subcommands)
+	}
+	if !containsString(schema.Subcommands, "compile") {
+		t.Fatalf("expected memory schema to expose compile, got %#v", schema.Subcommands)
 	}
 }
 

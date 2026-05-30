@@ -587,16 +587,19 @@ type subscriptionView struct {
 func buildSubscriptionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "subscription",
-		Short: "Inspect memory subscriptions",
-		Long: `Inspect memory subscriptions from the local OpenContext config.
+		Short: "Inspect and edit memory subscriptions",
+		Long: `Inspect and edit memory subscriptions from the local OpenContext config.
 
 A subscription chooses which event sources and labels become memory, which
 backend renders that memory, and which files receive it.`,
 		Example: `  oc subscription list --format json
-  oc subscription info global --format json`,
+  oc subscription info global --format json
+  oc subscription target add hermes --dry-run --format json`,
+		RunE: runGroupHelpOrUnknown,
 	}
 	cmd.AddCommand(buildSubscriptionListCmd())
 	cmd.AddCommand(buildSubscriptionInfoCmd())
+	cmd.AddCommand(buildSubscriptionTargetCmd())
 	return cmd
 }
 
@@ -742,6 +745,33 @@ func formatSources(sources []event.Source) string {
 	return strings.Join(parts, ",")
 }
 
+func buildSubscriptionTargetCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "target",
+		Short: "Manage additional subscription memory targets",
+		Long: `Manage additional targets that receive memory generated from a subscription.
+
+Targets are stored in the selected subscription config as memory.inject_targets.
+They do not compile memory by themselves; run oc memory compile or wait for the
+subscription refresh interval after adding a target.`,
+		Example: `  oc subscription target add hermes
+  oc subscription target add openclaw --dry-run --format json`,
+		RunE: runGroupHelpOrUnknown,
+	}
+	add := &cobra.Command{
+		Use:   "add",
+		Short: "Add a subscription memory target",
+		Long:  `Add an agent memory file as an OpenContext subscription memory target.`,
+		Example: `  oc subscription target add hermes
+  oc subscription target add openclaw --dry-run --format json`,
+		RunE: runGroupHelpOrUnknown,
+	}
+	add.AddCommand(buildInjectHermesCmd())
+	add.AddCommand(buildInjectOpenClawCmd())
+	cmd.AddCommand(add)
+	return cmd
+}
+
 // ── oc event ──────────────────────────────────────────────────────────────────
 
 func buildEventCmd() *cobra.Command {
@@ -755,6 +785,7 @@ agent hooks, OS collectors, Git hooks, and other sources.`,
 		Example: `  oc event list --since 5m
   oc event list --source shell --format json
   oc event clear --source git --dry-run --format json`,
+		RunE: runGroupHelpOrUnknown,
 	}
 	cmd.AddCommand(buildEventListCmd())
 	cmd.AddCommand(buildEventClearCmd())
@@ -915,17 +946,17 @@ events from one source. This is destructive.`,
 func buildMemoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "memory",
-		Short: "Compile memory and manage memory output targets",
+		Short: "Compile and inspect memory outputs",
 		Long: `Manage agent-readable memory generated from OpenContext events.
 
 Memory is produced from subscriptions. A subscription chooses which events are
-included and where the canonical memory file is written. Targets are additional
-agent files that receive injected memory sections.`,
+included and where the canonical memory file is written. Use
+oc subscription target add to edit additional output targets.`,
 		Example: `  oc memory compile --subscription global
-  oc memory target add hermes --dry-run --format json`,
+  oc memory compile --dry-run --format json`,
+		RunE: runGroupHelpOrUnknown,
 	}
 	cmd.AddCommand(buildMemoryCompileCmd())
-	cmd.AddCommand(buildMemoryTargetCmd())
 	return cmd
 }
 
@@ -1009,31 +1040,6 @@ memory.md path or wait for the raw_dump refresh interval.`,
 	return markSideEffect(cmd, false)
 }
 
-func buildMemoryTargetCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "target",
-		Short: "Manage additional memory injection targets",
-		Long: `Manage additional memory targets that receive the compiled memory section.
-
-Targets are stored in the selected subscription config as memory.inject_targets.
-They do not compile memory by themselves; run oc memory compile or wait for the
-subscription refresh interval after adding a target.`,
-		Example: `  oc memory target add hermes
-  oc memory target add openclaw --dry-run --format json`,
-	}
-	add := &cobra.Command{
-		Use:   "add",
-		Short: "Add a memory injection target",
-		Long:  `Add an agent memory file as an OpenContext memory injection target.`,
-		Example: `  oc memory target add hermes
-  oc memory target add openclaw --dry-run --format json`,
-	}
-	add.AddCommand(buildInjectHermesCmd())
-	add.AddCommand(buildInjectOpenClawCmd())
-	cmd.AddCommand(add)
-	return cmd
-}
-
 // ── oc collector ─────────────────────────────────────────────────────────────
 
 func buildCollectorCmd() *cobra.Command {
@@ -1055,6 +1061,7 @@ the command schema first and use --dry-run when available.`,
   oc schema collector shell install --format json
   oc collector shell install
   oc collector browser-chrome install --dry-run`,
+		RunE: runGroupHelpOrUnknown,
 	}
 	collector.AddCommand(buildCollectorListCmd())
 	collector.AddCommand(buildCollectorInfoCmd())
@@ -2566,7 +2573,8 @@ available subcommands, flags, defaults, value domains, and examples.`,
 		Example: `  oc schema
   oc schema collector browser-chrome install
   oc schema event list
-  oc schema subscription list`,
+  oc schema subscription list
+  oc schema subscription target add hermes`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target, err := findCommandForSchema(root, args)
 			if err != nil {
@@ -2711,6 +2719,13 @@ func splitExamples(example string) []string {
 	return out
 }
 
+func runGroupHelpOrUnknown(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
+	}
+	return cmd.Help()
+}
+
 func shorthandFlag(s string) string {
 	if s == "" {
 		return ""
@@ -2750,10 +2765,10 @@ maintain an "OpenContext — Recent Activity" section in that file.
 Hermes also reads .hermes.md / AGENTS.md / CLAUDE.md from the project
 directory — those files are already populated if you have a project
 subscription with claude_md configured.`,
-		Example: `  oc memory target add hermes
-  oc memory target add hermes --memory ~/.hermes/memories/MEMORY.md
-  oc memory target add hermes --header "## Recent Dev Activity"
-  oc memory target add hermes --dry-run --format json`,
+		Example: `  oc subscription target add hermes
+  oc subscription target add hermes --memory ~/.hermes/memories/MEMORY.md
+  oc subscription target add hermes --header "## Recent Dev Activity"
+  oc subscription target add hermes --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInjectTarget("hermes", memoryPath, header, configFile, dryRun)
 		},
@@ -2784,9 +2799,9 @@ OpenContext will maintain an "OpenContext — Recent Activity" section
 in that file.
 
 	If your OpenClaw agents use a custom workspace path, pass it with --memory.`,
-		Example: `  oc memory target add openclaw
-  oc memory target add openclaw --memory ~/.openclaw/my-agent/MEMORY.md
-  oc memory target add openclaw --dry-run --format json`,
+		Example: `  oc subscription target add openclaw
+  oc subscription target add openclaw --memory ~/.openclaw/my-agent/MEMORY.md
+  oc subscription target add openclaw --dry-run --format json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInjectTarget("openclaw", memoryPath, header, configFile, dryRun)
 		},

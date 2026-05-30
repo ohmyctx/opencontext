@@ -117,7 +117,7 @@ Rules for agents:
 
 - In non-TTY execution, `oc` defaults to JSON output. Still pass `--format json` when the surrounding workflow depends on machine-readable output, because it documents intent.
 - Use `--format table` only when the user explicitly wants human-readable tables.
-- For side-effect commands such as daemon service management, collector install/uninstall, memory compile triggers, event deletion, and inject target setup, run `--dry-run --format json` first when supported, then run the same command without `--dry-run` after the user confirms.
+- For side-effect commands such as daemon service management, collector install/uninstall, memory compile triggers, event deletion, and subscription target setup, run `--dry-run --format json` first when supported, then run the same command without `--dry-run` after the user confirms.
 - Inspect `oc schema <command...> --format json`; side-effect commands expose `side_effect`, `destructive`, and `dry_run_supported` when applicable.
 - OS activity events use `source: "os"` and include `labels.platform` (`macos` or `windows`) plus `labels.collector`, `labels.collector_version`, and `labels.host`.
 - Clipboard events are L3. Query with `oc event list --source os --max-sensitivity 3 --format json`, and only set subscription `max_sensitivity: 3` after explicit user consent.
@@ -566,6 +566,11 @@ subscriptions:
 
 Hermes reads memory from `~/.hermes/memories/MEMORY.md` (global memory file that persists across sessions). Configure OpenContext to inject into it:
 
+```bash
+oc subscription target add hermes --dry-run --format json
+oc subscription target add hermes
+```
+
 ```yaml
 memory:
   backend: "raw_dump"
@@ -599,6 +604,11 @@ subscriptions:
 ### OpenClaw
 
 OpenClaw reads workspace memory files from its workspace directory. Configure OpenContext to inject into it:
+
+```bash
+oc subscription target add openclaw --dry-run --format json
+oc subscription target add openclaw
+```
 
 ```yaml
 memory:
