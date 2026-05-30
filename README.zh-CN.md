@@ -45,20 +45,23 @@
 </p>
 
 ```text
-你说："继续早上那个 auth refactor。"
+你说："继续昨天那个 auth refactor。"
 
-没有 OpenContext：Agent 先问你改了什么、哪里失败、从哪个文件开始。
-有 OpenContext：   Agent 可以先读 memory.md，看到最近命令、失败构建、
-                  提交记录、当前项目和未完成事项。
+没有 OpenContext：Agent 记得对话内容，但不知道你在终端做了什么、
+                  昨晚提交了什么、今早 CI 有没有失败。
+有 OpenContext：   Agent 读 memory.md，知道你昨晚推送了哪些 commit、
+                  哪条命令失败了、停在了哪里。
 ```
 
 ## 为什么需要 OpenContext
 
-AI 编程 Agent 很强大，但大多数情况下每次新会话都记不住上次聊了什么。OpenContext 为它们构建了一个本地活动层：
+AI 编程 Agent 有聊天记忆，但不知道会话之外发生了什么。新会话不知道你昨晚提交了什么、今早的构建情况，或者你之前在 Cursor 里做了什么。
 
-- Shell 命令、Agent 提示、IDE hooks 以及更多收集器的事件流入同一个本地事件存储
+OpenContext 填补这个空白：
+
+- Shell 命令、Git 操作、Agent 提示、IDE 事件都流入同一个本地存储
 - 隐私等级决定记录什么、丢弃什么
-- Subscription 决定哪些项目和来源会成为 Agent 可读的记忆
+- Subscription 决定哪些来源和标签会成为 Agent 可读的记忆
 - `memory.md` 可以被 Claude Code、Cursor、Hermes、OpenClaw 等 Agent 引用
 
 ## AI Agent 安装（推荐）

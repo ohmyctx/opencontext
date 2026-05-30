@@ -45,18 +45,23 @@
 </p>
 
 ```text
-You: "Continue the auth refactor from this morning."
+You: "Continue the auth refactor from yesterday."
 
-Without OpenContext: the agent asks what changed, which tests failed, and where to look.
-With OpenContext:    the agent can read recent commands, failed builds, commits,
-                     active project notes, and open loops from memory.md.
+Without OpenContext: the agent knows what was said in chat, but has no idea
+                     what you did in the terminal, which commits you made,
+                     or what the CI build status looked like yesterday.
+With OpenContext:    the agent reads memory.md and knows exactly which
+                     commits were pushed, which commands failed, and
+                     where you left off.
 ```
 
 ## Why It Exists
 
-AI coding agents are powerful, but they start most sessions without memory of what happened outside the chat. OpenContext gives them a local activity layer:
+AI coding agents have chat memory — but they don't know what happened outside the conversation. A new session doesn't know what you committed last night, what command failed this morning, or what you did in Cursor before switching to Claude Code.
 
-- shell commands, agent prompts, IDE hooks, and future collectors flow into one local event store
+OpenContext fills that gap:
+
+- shell commands, git activity, agent prompts, and IDE events all flow into one local store
 - privacy levels decide what is recorded and what is dropped
 - subscriptions decide which sources and labels become agent-readable memory
 - `memory.md` can be referenced by Claude Code, Cursor, Hermes, OpenClaw, and other agents
@@ -119,6 +124,7 @@ In another terminal:
 ```bash
 oc status
 oc collector shell install
+oc collector git install --repo .
 source ~/.zshrc    # or ~/.bashrc for bash
 ```
 
@@ -128,7 +134,7 @@ Create `~/.opencontext/config.yaml` — see [`config.example.yaml`](config.examp
 subscriptions:
   - name: "global"
     filter:
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      sources: ["shell", "git", "claude", "codex", "cursor", "opencode"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -157,6 +163,7 @@ Service management uses launchd on macOS, systemd on Linux when available, and a
 | Source | Install command | Notes |
 |---|---|---|
 | Shell | `oc collector shell install` | zsh/bash command history with privacy filtering |
+| Git | `oc collector git install --repo .` | repository-local hooks for commits, branch switches, merges, and pushes |
 | Claude Code | `oc collector claude install` | installs Claude Code HTTP hooks |
 | Codex | `oc collector codex install` | installs Codex hook adapter |
 | Cursor | `oc collector cursor install` | installs Cursor hook adapter |
