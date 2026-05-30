@@ -49,7 +49,8 @@ You: "Continue the auth refactor from yesterday."
 
 Without OpenContext: the agent knows what was said in chat, but has no idea
                      what you did in the terminal, which commits you made,
-                     or what the CI build status looked like yesterday.
+                     what the CI build looked like, or what you asked Cursor
+                     before switching back here.
 With OpenContext:    the agent reads memory.md and knows exactly which
                      commits were pushed, which commands failed, and
                      where you left off.
@@ -57,11 +58,11 @@ With OpenContext:    the agent reads memory.md and knows exactly which
 
 ## Why It Exists
 
-AI coding agents have chat memory — but they don't know what happened outside the conversation. A new session doesn't know what you committed last night, what command failed this morning, or what you did in Cursor before switching to Claude Code.
+AI coding agents have chat memory — but they don't know what happened outside the conversation. A new session doesn't know what you committed last night, which commands failed this morning, what you asked another agent, or what you were browsing.
 
 OpenContext fills that gap:
 
-- shell commands, git activity, agent prompts, and IDE events all flow into one local store
+- terminal commands, git activity, other agent sessions, browser history, and more all flow into one local event store
 - privacy levels decide what is recorded and what is dropped
 - subscriptions decide which sources and labels become agent-readable memory
 - `memory.md` can be referenced by Claude Code, Cursor, Hermes, OpenClaw, and other agents

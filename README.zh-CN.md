@@ -48,18 +48,19 @@
 你说："继续昨天那个 auth refactor。"
 
 没有 OpenContext：Agent 记得对话内容，但不知道你在终端做了什么、
-                  昨晚提交了什么、今早 CI 有没有失败。
+                  昨晚提交了什么、今早 CI 有没有失败，
+                  你用另一个 agent 问了什么，或者浏览器的操作。
 有 OpenContext：   Agent 读 memory.md，知道你昨晚推送了哪些 commit、
                   哪条命令失败了、停在了哪里。
 ```
 
 ## 为什么需要 OpenContext
 
-AI 编程 Agent 有聊天记忆，但不知道会话之外发生了什么。新会话不知道你昨晚提交了什么、今早的构建情况，或者你之前在 Cursor 里做了什么。
+AI 编程 Agent 有聊天记忆，但不知道会话之外发生了什么。新会话不知道你昨晚提交了什么、今早的构建情况、你用另一个 agent 做了什么，或者你之前在浏览器里查了什么。
 
 OpenContext 填补这个空白：
 
-- Shell 命令、Git 操作、Agent 提示、IDE 事件都流入同一个本地存储
+- 终端命令、Git 操作、其他 Agent 对话、浏览器活动等多种信号都流入同一个本地事件存储
 - 隐私等级决定记录什么、丢弃什么
 - Subscription 决定哪些来源和标签会成为 Agent 可读的记忆
 - `memory.md` 可以被 Claude Code、Cursor、Hermes、OpenClaw 等 Agent 引用
