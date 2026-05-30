@@ -2,17 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.3.0] - 2026-05-29
+## [0.4.0] - 2026-05-30
 
 ### Added
-- **OpenClaw Hook**: Node.js hook script for OpenClaw agent session capture
-- **Hermes Hook**: Python hook script for Hermes agent session capture
-- **Agent Skill**: Optional `skills/opencontext/SKILL.md` for on-demand context queries without modifying system prompts or project files
-- **Privacy Expanded README**: Full privacy control model documented in README with sensitivity levels, source/label filtering, subscription isolation, and privacy checklist
+- **Git Collector**: Repository-local git hooks (post-commit, post-checkout, post-merge, post-push) that capture semantic git events — commits, branch switches, merges, and pushes — sent to daemon via `/api/v1/hooks/git`
+
+### Changed
+- **Why It Exists**: Clarified that agents have chat memory but lack knowledge of out-of-session activity — terminal commands, other agent sessions, browser history, CI builds, etc.
+- **Privacy section shortened**: Collapsed detailed privacy docs into a concise section while retaining core controls
 
 ### Fixed
 - **Claude Hook Dedup**: Use `/hooks/claude` as dedup key instead of full URL to prevent duplicate entries from `127.0.0.1` vs `localhost`
 - **YAML Path Bug**: Bare `~` in config paths unmarshals to Go nil causing silent WriteFile failure; absolute paths now used in all docs/examples
+
+## [0.3.0] - 2026-05-29
 
 ### Changed
 - **`projects` filter replaced with `label_selectors`**: Generic label-based filtering replaces removed `projects` field
