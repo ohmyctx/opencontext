@@ -12,6 +12,7 @@ const PACKAGE = require("./package.json");
 const VERSION = `v${PACKAGE.version}`;
 const NAME = "oc";
 const GITHUB_REPO = "ohmyctx/opencontext";
+const GITEE_REPO = "ohmyctx/opencontext";
 
 const PLATFORM_MAP = {
   darwin: "darwin",
@@ -59,6 +60,19 @@ function fetch(url, redirects = 5) {
   });
 }
 
+async function download(urls) {
+  for (const url of urls) {
+    try {
+      console.log(`[opencontext] Trying ${url}`);
+      const data = await fetch(url);
+      return data;
+    } catch (err) {
+      console.warn(`[opencontext] Failed: ${err.message}, trying next source...`);
+    }
+  }
+  throw new Error("All download sources failed");
+}
+
 function installedVersion(binaryPath) {
   try {
     return execFileSync(binaryPath, ["--version"], { encoding: "utf8", timeout: 5000 });
@@ -82,9 +96,13 @@ async function main() {
     return;
   }
 
-  const url = `https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${info.filename}`;
-  console.log(`[opencontext] Downloading ${url}`);
-  const data = await fetch(url);
+  const urls = [
+    `https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${info.filename}`,
+    `https://gitee.com/${GITEE_REPO}/releases/download/${VERSION}/${info.filename}`,
+  ];
+
+  console.log(`[opencontext] Downloading ${info.filename}`);
+  const data = await download(urls);
   const archive = path.join(binDir, `_tmp${info.ext}`);
   fs.writeFileSync(archive, data);
 
