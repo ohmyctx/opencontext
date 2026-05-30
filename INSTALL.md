@@ -43,6 +43,7 @@ Recommended default: install only the collectors for tools the user actually use
 | Collector | Install command | Use when |
 |---|---|---|
 | Shell | `oc collector shell install` | zsh/bash on Linux/macOS, PowerShell on Windows |
+| Git | `oc collector git install --repo <repo>` | user wants commit, branch switch, merge, and push activity for a repository |
 | Claude Code | `oc collector claude install` | user uses Claude Code locally |
 | Codex | `oc collector codex install` | user uses Codex CLI |
 | Cursor | `oc collector cursor install` | user uses Cursor hooks |
@@ -53,7 +54,7 @@ Recommended default: install only the collectors for tools the user actually use
 | macOS activity | read `docs/COLLECTOR_INSTALL.md` | user wants app/window/click/text activity on macOS |
 | Windows activity | read `docs/COLLECTOR_INSTALL.md` | user wants app/window/click/text activity on Windows |
 
-The shell and agent hook collectors are bundled in `oc`. The Chrome collector is a browser extension that `oc` can prepare locally, but Chrome requires the user to load the unpacked extension from `chrome://extensions`. The macOS and Windows activity collectors are external collectors stored in this repo; install them only when the user explicitly chooses OS activity capture. Collectors are language-agnostic as long as they report OpenContext events.
+The shell, Git, and agent hook collectors are bundled in `oc`. The Git collector installs repository-local hooks and preserves existing hooks through an OpenContext backup wrapper. The Chrome collector is a browser extension that `oc` can prepare locally, but Chrome requires the user to load the unpacked extension from `chrome://extensions`. The macOS and Windows activity collectors are external collectors stored in this repo; install them only when the user explicitly chooses OS activity capture. Collectors are language-agnostic as long as they report OpenContext events.
 
 The macOS and Windows activity collectors push directly to `oc daemon` in a normal install. Do not ask users to set up JSONL files or bridge scripts; those are local development helpers for unusual WSL2/network setups.
 
@@ -72,7 +73,7 @@ For the full collector configuration policy, read `docs/COLLECTOR_CONFIG.md`.
 Ask these questions before changing files:
 
 1. Which activity sources should OpenContext collect?
-   Suggested choices: shell, Claude Code, Codex, Cursor, OpenCode, Hermes, OpenClaw, Chrome browser, macOS activity, Windows activity.
+   Suggested choices: shell, Git, Claude Code, Codex, Cursor, OpenCode, Hermes, OpenClaw, Chrome browser, macOS activity, Windows activity.
 
 2. Where should OpenContext memory be connected?
    Suggested choices: OpenContext skill only (least invasive), Claude Code, Cursor or other project agents via a project memory file, Hermes, OpenClaw, standalone `~/.opencontext/memory.md`.
@@ -208,6 +209,7 @@ Run only the commands matching the user's choices:
 
 ```bash
 oc collector shell install
+oc collector git install --repo <absolute-or-relative-git-repo>
 oc collector claude install
 oc collector codex install
 oc collector cursor install
@@ -215,6 +217,12 @@ oc collector opencode install
 ```
 
 **For Windows users:** The shell collector installs PowerShell hooks automatically (no bash/zsh on Windows). PowerShell 5.1+ is required. After install, open a new PowerShell window — the hook loads via the profile and commands will be captured.
+
+**For Git:** install the collector once per repository where the user wants Git activity captured. Existing hooks are moved under `.git/hooks/.opencontext-backup/` and called by the generated wrapper. Verify after making a test commit or branch switch:
+
+```bash
+oc events --source git --since 10m --format json
+```
 
 ### Hermes Agent
 
@@ -375,7 +383,7 @@ Use this when the user wants one memory file across all work:
 subscriptions:
   - name: "global"
     filter:
-      sources: ["shell", "claude", "codex", "cursor", "opencode", "hermes", "openclaw"]
+      sources: ["shell", "git", "claude", "codex", "cursor", "opencode", "hermes", "openclaw"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -400,7 +408,7 @@ subscriptions:
     filter:
       label_selectors:
         project: "<project-name>"
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      sources: ["shell", "git", "claude", "codex", "cursor", "opencode"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -459,7 +467,7 @@ Claude Code reads `CLAUDE.md` in the project directory (and all parent directori
 subscriptions:
   - name: "global"
     filter:
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      sources: ["shell", "git", "claude", "codex", "cursor", "opencode"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -476,7 +484,7 @@ subscriptions:
     filter:
       label_selectors:
         project: "my-project"
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      sources: ["shell", "git", "claude", "codex", "cursor", "opencode"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -499,7 +507,7 @@ subscriptions:
     filter:
       label_selectors:
         project: "my-project"
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      sources: ["shell", "git", "claude", "codex", "cursor", "opencode"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -531,7 +539,7 @@ subscriptions:
     filter:
       label_selectors:
         project: "my-project"
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      sources: ["shell", "git", "claude", "codex", "cursor", "opencode"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -563,7 +571,7 @@ To capture activity **from** Hermes and also surface OpenContext memory **to** H
 subscriptions:
   - name: "global"
     filter:
-      sources: ["shell", "claude", "hermes", "openclaw"]
+      sources: ["shell", "git", "claude", "hermes", "openclaw"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -597,7 +605,7 @@ To capture activity **from** OpenClaw and also surface OpenContext memory **to**
 subscriptions:
   - name: "global"
     filter:
-      sources: ["shell", "claude", "hermes", "openclaw"]
+      sources: ["shell", "git", "claude", "hermes", "openclaw"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"
@@ -625,7 +633,7 @@ subscriptions:
     filter:
       label_selectors:
         project: "my-project"
-      sources: ["shell", "claude", "codex", "cursor", "opencode"]
+      sources: ["shell", "git", "claude", "codex", "cursor", "opencode"]
       max_sensitivity: 2
     memory:
       backend: "raw_dump"

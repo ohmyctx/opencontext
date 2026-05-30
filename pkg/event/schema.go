@@ -111,24 +111,43 @@ func init() {
 			Type:        EventTypeBranchSwitch,
 			Description: "The user switched to a different git branch, indicating a context switch.",
 			LabelDefs: map[string]FieldDef{
-				"repo": {Description: "Repository name", Example: "opencontext"},
+				"repo":   {Description: "Repository name", Example: "opencontext"},
+				"branch": {Description: "Current branch after checkout", Example: "main"},
 			},
 			PayloadDefs: map[string]FieldDef{
-				"from": {Description: "Branch switched from", Example: "feature/ingester"},
-				"to":   {Description: "Branch switched to", Example: "main"},
+				"from":    {Description: "Previous commit hash or branch ref", Example: "a1b2c3d4e5f6"},
+				"to":      {Description: "Branch switched to", Example: "main"},
+				"to_hash": {Description: "New commit hash after checkout", Example: "b2c3d4e5f6a7"},
 			},
 		},
 		{
 			Source:      SourceGit,
 			Type:        EventTypePush,
-			Description: "Code was pushed to a remote repository.",
+			Description: "A git push was attempted. Git exposes this as a pre-push hook before the remote accepts the update.",
 			LabelDefs: map[string]FieldDef{
 				"repo":   {Description: "Repository name", Example: "opencontext"},
 				"branch": {Description: "Branch that was pushed", Example: "main"},
+				"remote": {Description: "Remote name", Example: "origin"},
 			},
 			PayloadDefs: map[string]FieldDef{
-				"remote":       {Description: "Remote name", Example: "origin"},
-				"commit_count": {Description: "Number of commits pushed", Example: "3"},
+				"remote":     {Description: "Remote name", Example: "origin"},
+				"remote_url": {Description: "Remote URL as provided by git", Example: "git@github.com:ohmyctx/opencontext.git"},
+				"phase":      {Description: "Push hook phase; currently pre_push", Example: "pre_push"},
+				"ref_count":  {Description: "Number of ref updates in the push", Example: "1"},
+				"refs":       {Description: "Local and remote refs/hashes read from pre-push stdin", Example: "[{\"local_ref\":\"refs/heads/main\",\"remote_ref\":\"refs/heads/main\"}]"},
+			},
+		},
+		{
+			Source:      SourceGit,
+			Type:        EventTypeMerge,
+			Description: "A git merge completed in the repository, usually from git merge or git pull.",
+			LabelDefs: map[string]FieldDef{
+				"repo":   {Description: "Repository name", Example: "opencontext"},
+				"branch": {Description: "Current branch after merge", Example: "main"},
+			},
+			PayloadDefs: map[string]FieldDef{
+				"hash":    {Description: "HEAD commit hash after the merge", Example: "a1b2c3d"},
+				"message": {Description: "HEAD commit subject after the merge", Example: "Merge branch 'feature/git-collector'"},
 			},
 		},
 		{

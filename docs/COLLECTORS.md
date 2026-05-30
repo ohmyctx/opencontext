@@ -601,7 +601,7 @@ A `POST /api/v1/schemas` endpoint is planned for collectors that are not written
 |-----------|---------|-----------|-------------|
 | **Shell** | `oc collector shell install` | zsh/bash preexec + precmd hooks | `shell.command` |
 | **Claude Code** | Configured in `~/.claude/settings.json` | Claude Code HTTP hook (`UserPromptSubmit`, `SessionStart`) | `claude.user_message`, `claude.session_start` |
-| **Git** | `oc collector git install` | git post-commit, post-checkout hooks | `git.commit`, `git.branch_switch` |
+| **Git** | `oc collector git install --repo .` | git post-commit, post-checkout, post-merge, pre-push hooks | `git.commit`, `git.branch_switch`, `git.merge`, `git.push` |
 
 ---
 

@@ -2,8 +2,12 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/ohmyctx/opencontext/pkg/event"
 )
 
 func TestInstallBrowserChromeCollectorCopiesExtension(t *testing.T) {
@@ -86,6 +90,55 @@ func TestConfigureOutputModeTableOverridesNonTTYDefault(t *testing.T) {
 	}
 }
 
+func TestBuildGitHookEventPostCommit(t *testing.T) {
+	repo := initGitRepo(t)
+	writeAndCommit(t, repo, "hello.txt", "hello\n", "feat: initial commit")
+
+	e, err := buildGitHookEvent("post-commit", repo, "", "", "", "", "", 2, strings.NewReader(""))
+	if err != nil {
+		t.Fatalf("buildGitHookEvent() error = %v", err)
+	}
+	if e.Source != event.SourceGit || e.Type != event.EventTypeCommit {
+		t.Fatalf("unexpected event source/type: %s.%s", e.Source, e.Type)
+	}
+	if e.Labels["repo"] != filepath.Base(repo) {
+		t.Fatalf("repo label = %q, want %q", e.Labels["repo"], filepath.Base(repo))
+	}
+	if e.Payload["message"] != "feat: initial commit" {
+		t.Fatalf("message payload = %#v", e.Payload["message"])
+	}
+	if e.Payload["hash"] == "" {
+		t.Fatal("expected commit hash payload")
+	}
+}
+
+func TestBuildGitHookEventPrePushReadsRefs(t *testing.T) {
+	repo := initGitRepo(t)
+	writeAndCommit(t, repo, "hello.txt", "hello\n", "feat: initial commit")
+	stdin := strings.NewReader("refs/heads/main 0123456789abcdef refs/heads/main fedcba9876543210\n")
+
+	e, err := buildGitHookEvent("pre-push", repo, "", "", "", "origin", "git@example.com:repo.git", 2, stdin)
+	if err != nil {
+		t.Fatalf("buildGitHookEvent() error = %v", err)
+	}
+	if e.Type != event.EventTypePush {
+		t.Fatalf("event type = %s, want %s", e.Type, event.EventTypePush)
+	}
+	if e.Labels["remote"] != "origin" {
+		t.Fatalf("remote label = %q", e.Labels["remote"])
+	}
+	if e.Payload["phase"] != "pre_push" {
+		t.Fatalf("phase payload = %#v", e.Payload["phase"])
+	}
+	refs, ok := e.Payload["refs"].([]map[string]string)
+	if !ok || len(refs) != 1 {
+		t.Fatalf("refs payload = %#v", e.Payload["refs"])
+	}
+	if refs[0]["local_sha"] != "0123456789ab" {
+		t.Fatalf("local_sha = %q", refs[0]["local_sha"])
+	}
+}
+
 func schemaHasFlag(schema commandSchema, name string) bool {
 	for _, flag := range schema.Flags {
 		if flag.Name == name {
@@ -93,4 +146,35 @@ func schemaHasFlag(schema commandSchema, name string) bool {
 		}
 	}
 	return false
+}
+
+func initGitRepo(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	repo := t.TempDir()
+	runGit(t, repo, "init", "-b", "main")
+	runGit(t, repo, "config", "user.email", "test@example.com")
+	runGit(t, repo, "config", "user.name", "OpenContext Test")
+	return repo
+}
+
+func writeAndCommit(t *testing.T, repo, name, content, message string) {
+	t.Helper()
+	path := filepath.Join(repo, name)
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repo, "add", name)
+	runGit(t, repo, "commit", "-m", message)
+}
+
+func runGit(t *testing.T, repo string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, out)
+	}
 }

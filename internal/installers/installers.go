@@ -194,6 +194,80 @@ func InstallShell(sensitivity int) error {
 	return nil
 }
 
+func InstallGit(repo, daemonAddr string, sensitivity int) error {
+	if sensitivity < 1 || sensitivity > 2 {
+		sensitivity = 2
+	}
+	ocBin, err := resolvedExecutable()
+	if err != nil {
+		return err
+	}
+	repoRoot, gitDir, err := resolveGitRepo(repo)
+	if err != nil {
+		return err
+	}
+	hooksDir := filepath.Join(gitDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		return fmt.Errorf("create git hooks dir: %w", err)
+	}
+	backupDir := filepath.Join(hooksDir, ".opencontext-backup")
+	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+		return fmt.Errorf("create git hook backup dir: %w", err)
+	}
+
+	for _, hook := range []string{"post-commit", "post-checkout", "post-merge", "pre-push"} {
+		hookPath := filepath.Join(hooksDir, hook)
+		backupPath := filepath.Join(backupDir, hook)
+		if data, err := os.ReadFile(hookPath); err == nil {
+			if !strings.Contains(string(data), "OpenContext git collector") {
+				if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+					if err := os.Rename(hookPath, backupPath); err != nil {
+						return fmt.Errorf("backup existing %s hook: %w", hook, err)
+					}
+				}
+			}
+		}
+		script := gitHookWrapper(hook, ocBin, repoRoot, daemonAddr, backupPath, sensitivity)
+		if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+			return fmt.Errorf("write %s hook: %w", hook, err)
+		}
+	}
+
+	fmt.Println("Git hooks installed.")
+	fmt.Printf("  repo:        %s\n", repoRoot)
+	fmt.Printf("  hooks dir:   %s\n", hooksDir)
+	fmt.Printf("  daemon:      %s\n", daemonAddr)
+	fmt.Printf("  sensitivity: L%d\n", sensitivity)
+	fmt.Println("\nCaptured events: git.commit, git.branch_switch, git.merge, git.push.")
+	return nil
+}
+
+func UninstallGit(repo string) error {
+	_, gitDir, err := resolveGitRepo(repo)
+	if err != nil {
+		return err
+	}
+	hooksDir := filepath.Join(gitDir, "hooks")
+	backupDir := filepath.Join(hooksDir, ".opencontext-backup")
+	for _, hook := range []string{"post-commit", "post-checkout", "post-merge", "pre-push"} {
+		hookPath := filepath.Join(hooksDir, hook)
+		if data, err := os.ReadFile(hookPath); err == nil && strings.Contains(string(data), "OpenContext git collector") {
+			_ = os.Remove(hookPath)
+		}
+		backupPath := filepath.Join(backupDir, hook)
+		if _, err := os.Stat(backupPath); err == nil {
+			if _, err := os.Stat(hookPath); os.IsNotExist(err) {
+				if err := os.Rename(backupPath, hookPath); err != nil {
+					return fmt.Errorf("restore %s hook: %w", hook, err)
+				}
+			}
+		}
+	}
+	fmt.Println("Git hooks uninstalled.")
+	fmt.Printf("  hooks dir: %s\n", hooksDir)
+	return nil
+}
+
 func patchClaudeSettings(cfgPath, daemonAddr string) ([]byte, error) {
 	endpoint := strings.TrimRight(daemonAddr, "/") + "/api/v1/hooks/claude"
 	ocEntry := map[string]any{
@@ -316,6 +390,78 @@ func detectShell() string {
 		return shell
 	}
 	return "sh"
+}
+
+func resolveGitRepo(repo string) (string, string, error) {
+	if repo == "" {
+		repo = "."
+	}
+	rootCmd := exec.Command("git", "-C", repo, "rev-parse", "--show-toplevel")
+	rootOut, err := rootCmd.Output()
+	if err != nil {
+		return "", "", fmt.Errorf("resolve git repo %s: %w", repo, err)
+	}
+	repoRoot := strings.TrimSpace(string(rootOut))
+	gitDirCmd := exec.Command("git", "-C", repoRoot, "rev-parse", "--git-dir")
+	gitDirOut, err := gitDirCmd.Output()
+	if err != nil {
+		return "", "", fmt.Errorf("resolve git dir: %w", err)
+	}
+	gitDir := strings.TrimSpace(string(gitDirOut))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(repoRoot, gitDir)
+	}
+	return repoRoot, gitDir, nil
+}
+
+func gitHookWrapper(hook, ocBin, repoRoot, daemonAddr, backupPath string, sensitivity int) string {
+	return fmt.Sprintf(`#!/usr/bin/env bash
+# OpenContext git collector — installed by: oc collector git install
+# Hook: %s
+set +e
+
+tmp=""
+case "%s" in
+  pre-push)
+    tmp=$(mktemp "${TMPDIR:-/tmp}/oc-git-pre-push.XXXXXX")
+    cat > "$tmp"
+    ;;
+esac
+
+status=0
+if [ -x %q ]; then
+  if [ -n "$tmp" ]; then
+    %q "$@" < "$tmp"
+  else
+    %q "$@"
+  fi
+  status=$?
+fi
+
+case "%s" in
+  post-commit)
+    %q --daemon %q collector git push --hook post-commit --repo %q --sensitivity %d >/dev/null 2>&1 &
+    ;;
+  post-checkout)
+    %q --daemon %q collector git push --hook post-checkout --repo %q --old "$1" --new "$2" --flag "$3" --sensitivity %d >/dev/null 2>&1 &
+    ;;
+  post-merge)
+    %q --daemon %q collector git push --hook post-merge --repo %q --sensitivity %d >/dev/null 2>&1 &
+    ;;
+  pre-push)
+    if [ -n "$tmp" ]; then
+      %q --daemon %q collector git push --hook pre-push --repo %q --remote "$1" --remote-url "$2" --sensitivity %d < "$tmp" >/dev/null 2>&1 &
+      ( sleep 5; rm -f "$tmp" ) >/dev/null 2>&1 &
+    fi
+    ;;
+esac
+
+exit "$status"
+`, hook, hook, backupPath, backupPath, backupPath, hook,
+		ocBin, daemonAddr, repoRoot, sensitivity,
+		ocBin, daemonAddr, repoRoot, sensitivity,
+		ocBin, daemonAddr, repoRoot, sensitivity,
+		ocBin, daemonAddr, repoRoot, sensitivity)
 }
 
 func shellHookZsh(ocBin string, sensitivity int) string {

@@ -37,6 +37,7 @@ const (
 	EventTypeCommit       EventType = "commit"
 	EventTypeBranchSwitch EventType = "branch_switch"
 	EventTypePush         EventType = "push"
+	EventTypeMerge        EventType = "merge"
 	EventTypePRCreate     EventType = "pr_create"
 
 	// os

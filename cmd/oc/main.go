@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -691,6 +692,7 @@ schema first and use --dry-run when available.`,
   oc collector browser-chrome install --dry-run`,
 	}
 	collector.AddCommand(buildShellCollectorCmd())
+	collector.AddCommand(buildGitCollectorCmd())
 	collector.AddCommand(buildClaudeCollectorCmd())
 	collector.AddCommand(buildCodexCollectorCmd())
 	collector.AddCommand(buildCursorCollectorCmd())
@@ -831,6 +833,116 @@ func buildShellUninstallCmd() *cobra.Command {
 			return installers.UninstallShell()
 		},
 	}
+	return cmd
+}
+
+// ── git collector ─────────────────────────────────────────────────────────────
+
+func buildGitCollectorCmd() *cobra.Command {
+	git := &cobra.Command{
+		Use:   "git",
+		Short: "Git hook collector commands",
+		Long: `Install repository-local Git hooks or push Git events. The push
+subcommand is intended for generated hook scripts; users usually only run
+install or uninstall.`,
+		Example: `  oc collector git install --repo .
+  oc collector git uninstall --repo .
+  oc collector git push --hook post-commit --repo "$PWD"`,
+	}
+	git.AddCommand(buildGitPushCmd())
+	git.AddCommand(buildGitInstallCmd())
+	git.AddCommand(buildGitUninstallCmd())
+	return git
+}
+
+func buildGitInstallCmd() *cobra.Command {
+	var repo string
+	var sensitivity int
+	var daemonAddr string
+
+	cmd := &cobra.Command{
+		Use:   "install",
+		Short: "Install OpenContext Git hooks into a repository",
+		Long: `Installs repository-local hooks for meaningful Git events:
+post-commit, post-checkout, post-merge, and pre-push.
+
+Existing hooks are preserved by moving them to an OpenContext backup path and
+calling them from the generated wrapper. Hooks run non-blocking and should never
+slow down Git if the OpenContext daemon is unavailable.`,
+		Example: `  oc collector git install --repo .
+  oc collector git install --repo /path/to/repo --sensitivity 2`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if repo == "" {
+				repo = "."
+			}
+			return installers.InstallGit(repo, daemonAddr, sensitivity)
+		},
+	}
+	cmd.Flags().StringVar(&repo, "repo", ".", "repository path")
+	cmd.Flags().StringVar(&daemonAddr, "daemon", "http://localhost:6060", "OpenContext daemon base URL")
+	cmd.Flags().IntVar(&sensitivity, "sensitivity", 2, "sensitivity level: 1=metadata only, 2=commit messages and stats")
+	return cmd
+}
+
+func buildGitUninstallCmd() *cobra.Command {
+	var repo string
+
+	cmd := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove OpenContext Git hooks from a repository",
+		Long:  `Removes OpenContext-generated Git hook wrappers and restores backed-up hooks when present.`,
+		Example: `  oc collector git uninstall --repo .
+  oc collector git uninstall --repo /path/to/repo`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if repo == "" {
+				repo = "."
+			}
+			return installers.UninstallGit(repo)
+		},
+	}
+	cmd.Flags().StringVar(&repo, "repo", ".", "repository path")
+	return cmd
+}
+
+func buildGitPushCmd() *cobra.Command {
+	var (
+		hook        string
+		repo        string
+		oldRef      string
+		newRef      string
+		flag        string
+		remote      string
+		remoteURL   string
+		sensitivity int
+	)
+
+	cmd := &cobra.Command{
+		Use:    "push",
+		Hidden: true,
+		Short:  "Push a Git hook event to the OpenContext daemon",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if repo == "" {
+				repo = "."
+			}
+			e, err := buildGitHookEvent(hook, repo, oldRef, newRef, flag, remote, remoteURL, sensitivity, cmd.InOrStdin())
+			if err != nil || e == nil {
+				return nil
+			}
+			c := client.New(daemonURL)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_, _ = c.Push(ctx, e)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&hook, "hook", "", "git hook name")
+	cmd.Flags().StringVar(&repo, "repo", ".", "repository path")
+	cmd.Flags().StringVar(&oldRef, "old", "", "old ref/hash from git hook")
+	cmd.Flags().StringVar(&newRef, "new", "", "new ref/hash from git hook")
+	cmd.Flags().StringVar(&flag, "flag", "", "checkout flag from post-checkout")
+	cmd.Flags().StringVar(&remote, "remote", "", "remote name from pre-push")
+	cmd.Flags().StringVar(&remoteURL, "remote-url", "", "remote URL from pre-push")
+	cmd.Flags().IntVar(&sensitivity, "sensitivity", 2, "sensitivity level")
 	return cmd
 }
 
@@ -1693,6 +1805,173 @@ func firstWord(s string) string {
 		if c == ' ' || c == '\t' {
 			return s[:i]
 		}
+	}
+	return s
+}
+
+func buildGitHookEvent(hook, repo, oldRef, newRef, flag, remote, remoteURL string, sensitivity int, stdin io.Reader) (*event.ActivityEvent, error) {
+	repoRoot := gitOutput(repo, "rev-parse", "--show-toplevel")
+	if repoRoot == "" {
+		return nil, fmt.Errorf("not a git repository: %s", repo)
+	}
+	branch := gitOutput(repoRoot, "branch", "--show-current")
+	if branch == "" {
+		branch = gitOutput(repoRoot, "rev-parse", "--short", "HEAD")
+	}
+	repoName := filepath.Base(repoRoot)
+	labels := map[string]string{
+		"repo": repoName,
+	}
+	if branch != "" {
+		labels["branch"] = branch
+	}
+	payload := map[string]any{
+		"repo_path": repoRoot,
+	}
+	sens := event.SensitivityLevel(sensitivity)
+	if sens < event.SensitivityL1 || sens > event.SensitivityL2 {
+		sens = event.SensitivityL2
+	}
+
+	switch hook {
+	case "post-commit":
+		hash := gitOutput(repoRoot, "rev-parse", "--short", "HEAD")
+		author := gitOutput(repoRoot, "show", "-s", "--format=%an", "HEAD")
+		message := gitOutput(repoRoot, "show", "-s", "--format=%s", "HEAD")
+		if author != "" {
+			labels["author"] = author
+		}
+		if hash != "" {
+			payload["hash"] = hash
+		}
+		if sens >= event.SensitivityL2 && message != "" {
+			payload["message"] = message
+		}
+		addGitShortStat(repoRoot, payload)
+		return &event.ActivityEvent{
+			Ts:          time.Now().UnixMilli(),
+			Source:      event.SourceGit,
+			Type:        event.EventTypeCommit,
+			Sensitivity: sens,
+			Labels:      labels,
+			Payload:     payload,
+		}, nil
+	case "post-checkout":
+		if flag != "1" || oldRef == newRef || newRef == "" {
+			return nil, nil
+		}
+		payload["from"] = shortGitHash(oldRef)
+		payload["to"] = branch
+		if newRef != "" {
+			payload["to_hash"] = shortGitHash(newRef)
+		}
+		return &event.ActivityEvent{
+			Ts:          time.Now().UnixMilli(),
+			Source:      event.SourceGit,
+			Type:        event.EventTypeBranchSwitch,
+			Sensitivity: event.SensitivityL1,
+			Labels:      labels,
+			Payload:     payload,
+		}, nil
+	case "post-merge":
+		hash := gitOutput(repoRoot, "rev-parse", "--short", "HEAD")
+		message := gitOutput(repoRoot, "show", "-s", "--format=%s", "HEAD")
+		if hash != "" {
+			payload["hash"] = hash
+		}
+		if sens >= event.SensitivityL2 && message != "" {
+			payload["message"] = message
+		}
+		return &event.ActivityEvent{
+			Ts:          time.Now().UnixMilli(),
+			Source:      event.SourceGit,
+			Type:        event.EventTypeMerge,
+			Sensitivity: sens,
+			Labels:      labels,
+			Payload:     payload,
+		}, nil
+	case "pre-push":
+		refs := readPrePushRefs(stdin)
+		if remote != "" {
+			labels["remote"] = remote
+			payload["remote"] = remote
+		}
+		if remoteURL != "" {
+			payload["remote_url"] = remoteURL
+		}
+		payload["phase"] = "pre_push"
+		payload["ref_count"] = len(refs)
+		if len(refs) > 0 {
+			payload["refs"] = refs
+		}
+		return &event.ActivityEvent{
+			Ts:          time.Now().UnixMilli(),
+			Source:      event.SourceGit,
+			Type:        event.EventTypePush,
+			Sensitivity: event.SensitivityL1,
+			Labels:      labels,
+			Payload:     payload,
+		}, nil
+	default:
+		return nil, nil
+	}
+}
+
+func gitOutput(repo string, args ...string) string {
+	cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func addGitShortStat(repo string, payload map[string]any) {
+	stat := gitOutput(repo, "show", "--shortstat", "--format=", "HEAD")
+	if stat == "" {
+		return
+	}
+	for _, part := range strings.Split(stat, ",") {
+		fields := strings.Fields(strings.TrimSpace(part))
+		if len(fields) < 2 {
+			continue
+		}
+		n, err := strconv.Atoi(fields[0])
+		if err != nil {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(fields[1], "file"):
+			payload["files_changed"] = n
+		case strings.HasPrefix(fields[1], "insertion"):
+			payload["insertions"] = n
+		case strings.HasPrefix(fields[1], "deletion"):
+			payload["deletions"] = n
+		}
+	}
+}
+
+func readPrePushRefs(r io.Reader) []map[string]string {
+	var refs []map[string]string
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 4 {
+			continue
+		}
+		refs = append(refs, map[string]string{
+			"local_ref":  fields[0],
+			"local_sha":  shortGitHash(fields[1]),
+			"remote_ref": fields[2],
+			"remote_sha": shortGitHash(fields[3]),
+		})
+	}
+	return refs
+}
+
+func shortGitHash(s string) string {
+	if len(s) > 12 {
+		return s[:12]
 	}
 	return s
 }

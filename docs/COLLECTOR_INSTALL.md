@@ -16,6 +16,7 @@ Bundled collectors are installed by the `oc` binary:
 
 ```bash
 oc collector shell install
+oc collector git install --repo <repo>
 oc collector claude install
 oc collector codex install
 oc collector cursor install
@@ -23,8 +24,10 @@ oc collector opencode install
 ```
 
 These bundled hook collectors do not require separate directories under `collectors/`.
-Their install commands patch the target tool's hook configuration, and `oc daemon`
-receives those hook payloads at `/api/v1/hooks/<tool>`.
+Agent-tool hook collectors patch the target tool's hook configuration, and `oc daemon`
+receives those hook payloads at `/api/v1/hooks/<tool>`. The Git collector installs
+repository-local Git hooks and reports normalized `git.*` events directly through
+`POST /api/v1/events`.
 
 Standalone activity collectors live in this repository:
 

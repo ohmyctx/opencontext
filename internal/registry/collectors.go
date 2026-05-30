@@ -45,6 +45,16 @@ func AllCollectors() []CollectorManifest {
 			Install:     []string{"oc collector shell install"},
 		},
 		{
+			Name:        "git",
+			DisplayName: "Git",
+			Version:     "bundled",
+			Kind:        KindBundledHook,
+			Description: "Installs repository-local Git hooks for commit, branch switch, merge, and push events.",
+			Platforms:   []string{"darwin", "linux", "windows"},
+			Sources:     []string{string(event.SourceGit)},
+			Install:     []string{"oc collector git install --repo ."},
+		},
+		{
 			Name:        "claude",
 			DisplayName: "Claude Code",
 			Version:     "bundled",
